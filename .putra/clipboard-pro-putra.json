@@ -1,0 +1,169 @@
+{
+  "version": "1.0.0",
+  "history": [
+    {
+      "tags": [],
+      "id": "clipboard-1786992877760-6-sr4pbqr8k",
+      "content": "Leaflet.js",
+      "timestamp": "2026-08-17T18:54:37.760Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "Leaflet.js",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SPM\\fases.md",
+        "lineNumber": 47,
+        "selectionRange": {
+          "start": {
+            "line": 46,
+            "character": 0
+          },
+          "end": {
+            "line": 46,
+            "character": 10
+          }
+        }
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786992756004-5-tv6r3286k",
+      "content": "SPM.md",
+      "timestamp": "2026-08-17T18:52:36.004Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "SPM.md",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SPM\\fases.md",
+        "lineNumber": 3,
+        "selectionRange": {
+          "start": {
+            "line": 2,
+            "character": 29
+          },
+          "end": {
+            "line": 2,
+            "character": 29
+          }
+        }
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786992696947-4-4yx2xzzpv",
+      "content": "SPM.md y",
+      "timestamp": "2026-08-17T18:51:36.947Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "SPM.md y",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SPM\\fases.md",
+        "lineNumber": 3,
+        "selectionRange": {
+          "start": {
+            "line": 2,
+            "character": 29
+          },
+          "end": {
+            "line": 2,
+            "character": 29
+          }
+        }
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786992653905-3-pedu1kjpm",
+      "content": "Buenísimo. Te armo el roadmap completo, ordenado por fases y con las dependencias marcadas (qué necesitás terminar antes de pasar a lo siguiente). Este proyecto es básicamente visión por computadora + geolocalización + mapa web, así que la clave es no adelantarte: sin datos no hay modelo, sin modelo no hay detecciones que mapear.\r\n\r\nAntes de las fases, una aclaración importante sobre el enunciado: dice \"detección en tiempo real\" como desafío técnico, pero el entregable procesa video ya grabado. O sea, no necesitás que corra en vivo dentro del auto. El \"tiempo real\" acá se refiere a que el modelo sea lo bastante rápido para procesar video fluido. Podés hacer todo el pipeline offline (grabás, después procesás en la compu). Eso les simplifica muchísimo la vida.\r\n\r\nFase 0 — Definición y alcance\r\n\r\nEsto es papel y decisiones, pero define todo lo demás:\r\n\r\nDefinir los criterios de gravedad. ¿Qué es leve, moderado y crítico? Este es el punto más resbaladizo del proyecto (te explico por qué en la Fase 5). Definílo temprano aunque sea provisional.\r\nDelimitar la zona. No mapees \"todo el Gran Asunción\". Elegí un par de zonas o rutas concretas de Encarnación o donde vayan a grabar. Un alcance chico y bien hecho vale más que uno ambicioso a medias.\r\nRepartir roles entre vos, Lucas y Emanuel (datos/etiquetado, modelo, backend+mapa suele ser un reparto natural).\r\nFijar el stack. Mi recomendación: Python + Ultralytics YOLO (detección), OpenCV (video), Leaflet.js (mapa), SQLite o PostgreSQL. Todo gratis y con buena documentación.\r\nFase 1 — Recolección de datos (hardware + grabación)\r\nMontar una cámara en el vehículo (un celular sirve perfecto, o una action cam).\r\nRegistrar el GPS en paralelo. Grabá un track GPX con timestamps (apps de logging de GPS o el propio celular). El detalle crítico: sincronizar los relojes de la cámara y del GPS, porque después vas a cruzar \"frame en tal segundo → coordenada en tal segundo\". Si los relojes están desfasados, todo el mapa queda corrido.\r\nGrabar varias pasadas por las rutas elegidas, de día y con buena luz.\r\nFase 2 — Dataset y etiquetado\r\nExtraer frames del video (con OpenCV, uno cada X frames).\r\nEtiquetar los baches con cajas (bounding boxes). Herramientas: Roboflow (la más cómoda, hace el split y augmentation solo), CVAT o LabelImg.\r\nPara arrancar más rápido, buscá datasets públicos de baches (hay varios en Roboflow Universe y Kaggle) y combinálos con tus datos locales — el asfalto de Paraguay tiene su propio \"look\", así que conviene mezclar.\r\nDividir en train / validación / test y aplicar data augmentation.\r\nFase 3 — Modelo de detección\r\nEntrenar un YOLO (YOLOv8 o v11 de Ultralytics) sobre tu dataset. Es el estándar para detección en tiempo real y se entrena con pocas líneas.\r\nEvaluar con las métricas correctas: mAP, precision y recall. No te fíes solo del \"se ve bien\", medí.\r\nIterar: si detecta mal, casi siempre es problema de datos (pocos o mal etiquetados), no del modelo.\r\nFase 4 — Sincronización frames ↔ GPS\r\nPor cada frame donde el modelo detecta un bache, tomás su timestamp y lo cruzás con el track GPS para obtener la coordenada (interpolando entre puntos GPS).\r\nGuardás el keyframe (la imagen del momento) junto con lat/lng, confianza y timestamp.\r\nFase 5 — Clasificación de gravedad (leve / moderado / crítico)\r\n\r\nOjo, este es el desafío de investigación real del proyecto. Una cámara común (monocular) no ve profundidad, así que \"qué tan grave es el bache\" no sale gratis. Tenés que elegir un enfoque y justificarlo:\r\n\r\nPor tamaño relativo en la imagen (área del bounding box respecto al frame): simple, pero engaña con la distancia.\r\nMulti-clase: entrenar el YOLO con tres clases (leve/moderado/crítico) y que el modelo clasifique directo. Requiere etiquetar con esos criterios desde el principio.\r\nEstimación de tamaño real usando la geometría de la cámara (más preciso, más complejo).\r\n\r\nPara un trabajo de facu, el multi-clase o el tamaño relativo son perfectamente defendibles si explicás bien las limitaciones. No te compliques con profundidad real salvo que te sobre tiempo.\r\n\r\nFase 6 — Deduplicación (que no cuente el mismo bache 20 veces)\r\n\r\nEl mismo bache aparece en muchos frames seguidos. Dos técnicas que podés combinar:\r\n\r\nTracking de objetos: Ultralytics trae ByteTrack/BoT-SORT integrado — le asigna un ID a cada bache y así no lo recontás mientras esté en pantalla.\r\nClustering espacial: aplicar DBSCAN sobre las coordenadas GPS de las detecciones. Baches a menos de X metros entre sí = el mismo bache. Esto también limpia duplicados entre distintas pasadas por la misma calle.\r\nFase 7 — Backend y base de datos\r\nGuardar cada bache único: lat, lng, gravedad, confianza, timestamp, ruta a la foto.\r\nSQLite alcanza y sobra para el alcance del proyecto; si quieren algo más pro, PostgreSQL con la extensión PostGIS (geoespacial).\r\nFase 8 — Mapa interactivo (el entregable)\r\nLeaflet.js (gratis, liviano) para el mapa. Marcadores de color según gravedad (verde/amarillo/rojo).\r\nPopup en cada marcador con la foto del bache y su clasificación.\r\nFiltros por gravedad. Con eso ya cumplís el entregable pedido.\r\nFase 9 — Integración end-to-end\r\nArmar el pipeline completo: entra un video → sale el mapa poblado. Un script que encadene todo (detección → GPS → dedup → base → mapa).\r\nFase 10 — Documentación, pruebas y presentación\r\nDocumentar decisiones (sobre todo el criterio de gravedad y el de deduplicación, que es lo que más van a preguntar).\r\nMétricas finales del modelo y una demo con datos reales.",
+      "timestamp": "2026-08-17T18:50:53.905Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "Buenísimo. Te armo el roadmap completo, ordenado por fases y con las dependencias marcadas (qué nece...",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SPM\\fases.md",
+        "lineNumber": 1,
+        "selectionRange": {
+          "start": {
+            "line": 0,
+            "character": 0
+          },
+          "end": {
+            "line": 0,
+            "character": 0
+          }
+        }
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786992565762-2-ixj12fhbz",
+      "content": "- Frontend",
+      "timestamp": "2026-08-17T18:49:25.762Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "- Frontend",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SPM\\SPM.md",
+        "lineNumber": 25,
+        "selectionRange": {
+          "start": {
+            "line": 24,
+            "character": 10
+          },
+          "end": {
+            "line": 24,
+            "character": 20
+          }
+        }
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786991637314-1-hkzivgrcb",
+      "content": "Leer el archivo SPM.md. Completar las tareas y agregar requerimientos funcionales",
+      "timestamp": "2026-08-17T18:33:57.314Z",
+      "isPinned": false,
+      "language": "plaintext",
+      "preview": "Leer el archivo SPM.md. Completar las tareas y agregar requerimientos funcionales",
+      "metadata": {
+        "source": "copy"
+      }
+    },
+    {
+      "tags": [],
+      "id": "clipboard-1786991460104-1-qspmcu4s9",
+      "content": "# Sistema de Deteccion y Mapeo Automatico de Baches (SAD Pothole Map - optativo)\r\n\r\n## Contexto Local\r\nEl estado de la capa asfaltica de Encarnacion es un gran problema prioritario de insfraestructura y seguridad vial.\r\n\r\n## Objetivo\r\nClasificar y geolocalizar daños(baches, fisura severas) en la calzada procesando viedo grabado desde una camara montada en un vehiculo.\r\n\r\n## Desafio Tecnico\r\nDeteccion de objetos en video en tiempo real. Extraer los fotogramas clave, asociados a las coordenadas GPS de la grabacion y evitar duplicados de un mismo bache.\r\n\r\n## Entregable\r\nMapa interactivo de la ciudad donde se señalan los baches detectados clasificados por gravedad (leve, moderado, critico).\r\n\r\n# Tareas e Investigacion\r\n \r\n## App de mapa interactivo\r\n\r\n### T01AM\r\nCrear una app frontend para mostrar un mapa de Encarnacion.\r\n\r\n### T02AM\r\nPoder marcar puntos puntos que representen baches en la zona del mapa mostrado (en un radio).\r\n\r\n### T03AM \r\nCrear una api para almacenar los datos de los baches. Consumir la api para mostrar los puntos de bache.\r\n\r\n\r\n## IA y Entrenamiento\r\n\r\n### \r\n\r\n## Grabado y Procesamiento de datos\r\n\r\n### T01GP\r\nCrear aplicacion para procesar video con el modelo entrenado y generar los registros de los baches en la api server.",
+      "timestamp": "2026-08-17T18:32:31.700Z",
+      "isPinned": false,
+      "language": "markdown",
+      "preview": "# Sistema de Deteccion y Mapeo Automatico de Baches (SAD Pothole Map - optativo)\r\n\r\n## Contexto Loca...",
+      "metadata": {
+        "source": "copy",
+        "filePath": "c:\\Users\\lucas\\OneDrive\\Escritorio\\SDMB\\SDMB.md",
+        "lineNumber": 9,
+        "selectionRange": {
+          "start": {
+            "line": 8,
+            "character": 4
+          },
+          "end": {
+            "line": 35,
+            "character": 116
+          }
+        }
+      }
+    }
+  ],
+  "pinnedItems": [],
+  "settings": {
+    "maxHistorySize": 100,
+    "autoDetectLanguage": true,
+    "showPreview": true,
+    "storageLocation": "workspace"
+  },
+  "lastModified": "2026-08-17T18:54:39.271Z"
+}
