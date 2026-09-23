@@ -1,0 +1,3 @@
+opencv-python>=4.9
+# Nombres de dispositivos DirectShow (solo Windows)
+pygrabber>=0.2; sys_platform == "win32"
