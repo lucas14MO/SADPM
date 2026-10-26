@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
+import time
 from dataclasses import dataclass
 
 # Silencia los warnings de OpenCV al sondear índices inexistentes.
@@ -87,6 +89,20 @@ def list_cameras(max_index: int = 10, backend: int | None = None) -> list[Camera
     return found
 
 
+def choose_camera(cameras: list[CameraInfo]) -> CameraInfo:
+    if len(cameras) == 1:
+        return cameras[0]
+    print("Cámaras detectadas:")
+    for cam in cameras:
+        print(f"  {cam}")
+    valid = {c.index: c for c in cameras}
+    while True:
+        raw = input("Índice de la cámara a usar: ").strip()
+        if raw.isdigit() and int(raw) in valid:
+            return valid[int(raw)]
+        print("Índice inválido.")
+
+
 def open_camera(
     index: int,
     width: int | None = None,
@@ -122,3 +138,53 @@ def open_camera(
         cap.release()
         raise RuntimeError(f"La cámara {index} se abrió pero no entrega fotogramas.")
     return cap
+
+
+class LatestFrameGrabber:
+    """Lee la cámara en un hilo y conserva sólo el último fotograma.
+
+    Cuando el procesamiento por fotograma es más lento que la cámara (p. ej.
+    inferencia en CPU), leer directamente de ``VideoCapture`` acumula retraso
+    en el buffer del driver. Con este lector siempre se procesa la imagen más
+    reciente, junto con el instante (``time.perf_counter``) en que se capturó.
+    """
+
+    def __init__(self, cap: cv2.VideoCapture) -> None:
+        self._cap = cap
+        self._cond = threading.Condition()
+        self._frame = None
+        self._perf = 0.0
+        self._seq = 0
+        self._failures = 0
+        self._running = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while self._running:
+            ok, frame = self._cap.read()
+            perf = time.perf_counter()
+            with self._cond:
+                if ok:
+                    self._frame, self._perf = frame, perf
+                    self._seq += 1
+                    self._failures = 0
+                else:
+                    self._failures += 1
+                self._cond.notify_all()
+            if not ok:
+                time.sleep(0.01)
+
+    def read(self, last_seq: int = 0, timeout: float = 2.0):
+        """Espera un fotograma más nuevo que ``last_seq``.
+
+        Devuelve ``(frame, perf, seq)`` o ``None`` si la cámara dejó de entregar imagen.
+        """
+        with self._cond:
+            if not self._cond.wait_for(lambda: self._seq > last_seq, timeout):
+                return None
+            return self._frame, self._perf, self._seq
+
+    def stop(self) -> None:
+        self._running = False
+        self._thread.join(timeout=2.0)

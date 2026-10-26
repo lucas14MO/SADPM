@@ -50,6 +50,39 @@ el fotograma *N*, se busca su hora UTC y se interpola la posición en el `.gpx`.
 Se usa esta tabla (y no `N / fps`) porque las cámaras USB no entregan fps
 perfectamente constantes.
 
+## Detección en vivo (`detect.py`)
+
+Corre un modelo YOLO sobre la imagen de la cámara y sigue cada bache con
+ByteTrack: en pantalla se ve la caja, un ID (`Bache #3`), la confianza y la
+estela del recorrido, como en un tracker.
+
+```powershell
+python detect.py --camera 1              # vista previa; R inicia/detiene la sesión
+python detect.py --camera 1 --record     # grabar y registrar desde el inicio
+python detect.py --camera 1 --conf 0.4   # exigir más confianza (menos falsos positivos)
+python detect.py --camera 1 --imgsz 480  # más fps, menos precisión en baches chicos
+```
+
+Mientras se graba (tecla **R**), además de `video.mp4`, `frames.csv` y
+`session.json`, la carpeta de la sesión incluye:
+
+| Archivo | Contenido |
+| --- | --- |
+| `annotated.mp4` | Video con cajas, IDs y estelas dibujados. |
+| `detections.csv` | Una fila por bache y fotograma: `frame, utc, track_id, clase, confianza, x1, y1, x2, y2`. |
+| `tracks.csv` | Una fila por bache único: fotogramas y hora UTC de primera/última vista, confianza máxima, mejor fotograma y recorte. `valido=1` si se vio en al menos `--min-frames` fotogramas (default 3). |
+| `crops/bache_NNNN.jpg` | Recorte del fotograma de mayor confianza de cada bache. |
+
+`frame` en `detections.csv` es el mismo índice que en `frames.csv` y `video.mp4`.
+
+**Modelo**: por defecto se descarga en `models/` un YOLO11n público
+([tahaUgan/pothole-yolo11n](https://huggingface.co/tahaUgan/pothole-yolo11n),
+CC-BY-4.0) como modelo provisional hasta entrenar el propio (Fase 3). Para usar
+otro: `--model ruta/al/best.pt`.
+
+**Rendimiento**: en CPU (sin GPU) la detección corre a ~10–13 fps en 1080p;
+los videos de la sesión se escriben a esos fps, no a los 30 de la cámara.
+
 ## Protocolo de sincronización con el GPS
 
 1. Antes de salir, sincronizar la hora de la laptop (Windows: *Configuración →

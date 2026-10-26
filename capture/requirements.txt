@@ -1,3 +1,8 @@
 opencv-python>=4.9
 # Nombres de dispositivos DirectShow (solo Windows)
 pygrabber>=0.2; sys_platform == "win32"
+
+# Detección en vivo (detect.py). Sin GPU NVIDIA, instalar antes PyTorch para CPU:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+ultralytics>=8.3
+lap>=0.5

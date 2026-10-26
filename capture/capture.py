@@ -25,7 +25,7 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 
 import cv2  # noqa: E402
 
-from spm_capture.cameras import CameraInfo, device_name, list_cameras, open_camera
+from spm_capture.cameras import choose_camera, device_name, list_cameras, open_camera
 from spm_capture.recorder import SessionRecorder
 
 WINDOW = "SPM - Captura (R: grabar/detener, Q: salir)"
@@ -46,20 +46,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--duration", type=float, help="Detener la grabación tras N segundos y salir.")
     p.add_argument("--max-index", type=int, default=10, help="Índices a sondear si no hay nombres.")
     return p.parse_args()
-
-
-def choose_camera(cameras: list[CameraInfo]) -> CameraInfo:
-    if len(cameras) == 1:
-        return cameras[0]
-    print("Cámaras detectadas:")
-    for cam in cameras:
-        print(f"  {cam}")
-    valid = {c.index: c for c in cameras}
-    while True:
-        raw = input("Índice de la cámara a usar: ").strip()
-        if raw.isdigit() and int(raw) in valid:
-            return valid[int(raw)]
-        print("Índice inválido.")
 
 
 def measure_fps(cap: cv2.VideoCapture, seconds: float = 1.5) -> float:
