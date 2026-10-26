@@ -3,6 +3,9 @@
 Herramienta para grabar video desde cualquier cámara conectada al equipo y dejar
 los timestamps necesarios para sincronizarlo con el track GPS.
 
+El procesamiento offline de la Fase 5 se ejecuta después sobre una carpeta de
+sesión; no modifica ni reemplaza el flujo de captura/detección en vivo.
+
 Acepta cualquier dispositivo que el sistema reconozca como cámara (UVC):
 webcam integrada, webcam USB, cámara de acción / dashcam en modo webcam,
 capturadora HDMI‑USB para cámaras con salida HDMI, o cámaras virtuales (OBS,
@@ -82,6 +85,38 @@ otro: `--model ruta/al/best.pt`.
 
 **Rendimiento**: en CPU (sin GPU) la detección corre a ~10–13 fps en 1080p;
 los videos de la sesión se escriben a esos fps, no a los 30 de la cámara.
+
+## Procesamiento offline (Fase 5)
+
+El modelo multiclase debe incluir exactamente las clases `pothole_light`,
+`pothole_moderate` y `pothole_critical`. Instala las dependencias de captura con
+`pip install -r requirements.txt` (incluye `gpxpy`) y ejecuta desde `capture/`:
+
+```bash
+python process_video.py recordings/sesion_AAAAMMDD_HHMMSS \
+   --model ../weights/weights.pt
+python process_video.py recordings/sesion_AAAAMMDD_HHMMSS \
+   --model ../weights/weights.pt --gpx ruta/al/track.gpx --conf 0.35 --min-frames 3
+```
+
+La carpeta debe contener `video.mp4` y `frames.csv`. Si no se indica `--gpx`,
+debe existir exactamente un archivo `.gpx` dentro de la sesión. `frames.csv`
+asocia cada índice del video con el timestamp UTC capturado; no se calcula el
+tiempo GPS como `frame / FPS`, ya que la tasa de reproducción puede diferir del
+tiempo real. El FPS del contenedor se valida y se informa como metadato.
+
+Ultralytics ejecuta `model.track` secuencialmente con `persist=True` y
+`bytetrack.yaml` por defecto. Por `track_id`, se requiere un mínimo de tres
+observaciones (configurable con `--min-frames`), la severidad se decide por
+mayoría y los empates por suma de confianza de clase. El timestamp, la posición
+y la evidencia corresponden a la observación de mayor confianza. Si ese tiempo
+queda fuera de la cobertura GPX, latitud y longitud se exportan como `null`.
+
+La sesión recibe `processed_potholes.json` y `crops/pothole_NNNN.jpg`. Cada
+elemento JSON contiene `track_id`, `severity`, `confidence_avg`,
+`confidence_max`, `latitude`, `longitude`, `timestamp` UTC, `frame_key`,
+`frames_detected` y `evidence_image` (ruta relativa). Este paso solo exporta
+datos localmente; no sube imágenes/API ni deduplica detecciones entre sesiones.
 
 ## Protocolo de sincronización con el GPS
 

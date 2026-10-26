@@ -13,15 +13,15 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | 3 | Entrenamiento propio | ⏳ Pendiente (hoy se usa un modelo público provisional) |
 | 4 | Clasificación de gravedad | ⏳ Pendiente |
 | 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`) |
-| 5 | **Georreferenciación (unir detecciones con GPS)** | ❌ **No implementada todavía** |
+| 5 | **Georreferenciación offline (unir detecciones con GPS)** | ✅ Implementada en `capture/process_video.py` |
 | 6 | Deduplicación espacial (DBSCAN) | ⏳ Pendiente |
 | 7 | Backend Django REST | ✅ Hecho (`backend/`, ver [API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)) |
 | 8 | Frontend mapa (React + Leaflet) | ✅ Base hecha con datos mock (`frontend/`) |
 | 9 | Integración end-to-end | ⏳ Pendiente |
 
-> **Importante:** hoy el sistema **no guarda coordenadas GPS** en ningún archivo.
-> Lo que sí guarda es la hora UTC exacta de cada fotograma, que es lo necesario
-> para asignar el GPS después (sección 4).
+> **Importante:** la captura no guarda coordenadas GPS en `video.mp4`; la Fase 5
+> las asigna después mediante el `.gpx` y el timestamp UTC por fotograma de
+> `frames.csv`.
 
 ## 2. Cómo se usa
 
@@ -140,7 +140,32 @@ video **no** equivale al tiempo real. La única referencia confiable es `frames.
 - `start_epoch` se toma al crear la sesión, un instante antes de que el
   codificador de video abra el archivo (despreciable, milisegundos).
 
-## 5. Protocolo de sincronización con el GPS (en campo)
+## 5. Procesamiento offline de Fase 5
+
+Desde `capture/`, instalar `requirements.txt` y procesar una carpeta de sesión
+con un modelo entrenado que contenga `pothole_light`, `pothole_moderate` y
+`pothole_critical`:
+
+```bash
+python process_video.py recordings/sesion_AAAAMMDD_HHMMSS --model ../weights/weights.pt
+```
+
+La sesión requiere `video.mp4`, `frames.csv` y exactamente un `.gpx` (o se pasa
+con `--gpx`). La inferencia recorre el video con ByteTrack (`persist=True`),
+resume cada `track_id` por voto de clase y desempata por confianza agregada.
+Solo se exportan tracks observados al menos `--min-frames` veces (default 3).
+El keyframe es la observación de confianza máxima; su hora se toma de `frames.csv`
+y se interpola linealmente en GPX. Fuera de la cobertura GPX se conservan el
+bache y su evidencia, pero `latitude`/`longitude` son `null`.
+
+La salida `processed_potholes.json` contiene una lista de objetos con
+`track_id`, `severity`, `confidence_avg`, `confidence_max`, `latitude`,
+`longitude`, `timestamp`, `frame_key`, `frames_detected` y `evidence_image`.
+Los recortes se guardan bajo `crops/`. Esta exportación local no realiza carga a
+Django ni deduplicación espacial entre sesiones. El módulo de implementación y
+opciones se documentan en [capture/README.md](capture/README.md).
+
+## 6. Protocolo de sincronización con el GPS (en campo)
 
 1. Sincronizar la hora de la laptop (Windows: *Configuración → Hora e idioma →
    Sincronizar ahora*). El GPS toma la hora de los satélites.
@@ -152,43 +177,24 @@ video **no** equivale al tiempo real. La única referencia confiable es `frames.
 5. Al terminar, detener la grabación y luego el logger. Guardar el `.gpx` / `.csv`
    **dentro de la carpeta de la sesión**.
 
-## 6. Cómo se va a guardar el GPS (Fase 5 — pendiente)
+## 7. Cómo se guarda el GPS (Fase 5)
 
 El GPS no se escribe durante la grabación: viene en un archivo `.gpx` aparte y
 se une **después**, por hora UTC. El `.gpx` guarda puntos `<trkpt lat lon>` con
 `<time>` en UTC, igual formato de hora que `frames.csv`, y por eso se pueden cruzar.
 
-Algoritmo previsto (interpolación lineal, ver [fases.md](fases.md) Fase 5):
+El procesador offline implementa interpolación lineal para el keyframe de mayor
+confianza de cada track válido:
 
-1. Por cada bache válido en `tracks.csv`, tomar la hora UTC de su `mejor_frame`
-   (buscándola en `frames.csv` o en `detections.csv`).
+1. Por cada `track_id` con suficientes observaciones, tomar el timestamp UTC del
+   frame con confianza máxima, consultándolo en `frames.csv`.
 2. En el `.gpx`, buscar los dos puntos que la rodean: `t0 ≤ t ≤ t1`.
 3. Interpolar: `f = (t − t0) / (t1 − t0)`, `lat = lat0 + f·(lat1 − lat0)`, `lon` igual.
-4. Guardar el resultado (lat/lon por bache) y mandarlo a la API.
+4. Guardar lat/lon en `processed_potholes.json`; si el timestamp queda fuera del
+   tramo GPS, se guardan como `null`.
 
-Boceto (con `gpxpy`, aún no está en `requirements.txt` ni en el repo):
-
-```python
-import csv, gpxpy
-from datetime import datetime
-
-pts = [p for trk in gpxpy.parse(open("track.gpx")).tracks
-         for seg in trk.segments for p in seg.points]
-
-def position_at(t: datetime):
-    for a, b in zip(pts, pts[1:]):
-        if a.time <= t <= b.time:
-            f = (t - a.time) / (b.time - a.time)
-            return a.latitude + f * (b.latitude - a.latitude), \
-                   a.longitude + f * (b.longitude - a.longitude)
-    return None  # fuera del tramo con GPS
-
-frames = {int(r["frame"]): r["utc"] for r in csv.DictReader(open("frames.csv"))}
-for t in csv.DictReader(open("tracks.csv")):
-    if t["valido"] == "1":
-        utc = datetime.fromisoformat(frames[int(t["mejor_frame"])])
-        print(t["track_id"], position_at(utc))
-```
+La implementación está en `capture/spm_capture/offline.py`, usa `gpxpy` y se
+invoca con el comando documentado en la sección 5.
 
 Notas para la implementación real: a 1 Hz del GPS y ~40 km/h el vehículo avanza
 ~11 m entre puntos, por eso interpolar y no tomar el punto más cercano; además
@@ -196,10 +202,12 @@ la posición del GPS es la del dispositivo, no la del bache (que está unos metr
 adelante), lo que podría requerir un pequeño desplazamiento en la dirección de
 marcha.
 
-## 7. Cómo encaja con el backend
+## 8. Integración futura con el backend
 
-Cuando exista la Fase 5 completa, cada bache válido se enviaría a
-`POST /api/baches/` ([API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)):
+La exportación actual no llama a la API. Una futura ingesta a
+`POST /api/baches/` ([API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)) deberá
+mapear las clases del modelo a los valores aceptados por Django (`leve`,
+`moderado`, `critico`) y omitir o resolver los baches sin coordenadas:
 
 | Campo de la API | De dónde saldrá |
 | --- | --- |
@@ -207,27 +215,29 @@ Cuando exista la Fase 5 completa, cada bache válido se enviaría a
 | `timestamp_deteccion` | `utc` del `mejor_frame` |
 | `confianza` | `confianza_max` de `tracks.csv` |
 | `imagen` | `crops/bache_NNNN.jpg` |
-| `gravedad` | Fase 4 (pendiente) |
+| `gravedad` | Mapear `pothole_light/moderate/critical` a `leve/moderado/critico` |
 | `radio_estimado` | Fase 4 (pendiente) |
 
-## 8. Estructura del código de captura
+## 9. Estructura del código de captura
 
 ```
 capture/
 ├── capture.py              # Grabación de video + frames.csv + session.json
 ├── detect.py               # Lo anterior + detección YOLO + tracking
+├── process_video.py        # Procesamiento offline + GPX + JSON
 ├── requirements.txt
 ├── README.md               # Guía rápida de uso
 └── spm_capture/
     ├── cameras.py          # Listar/abrir cámaras (DirectShow en Windows); LatestFrameGrabber
     ├── recorder.py         # SessionRecorder (tiempos) y AsyncVideoWriter (video en hilo aparte)
-    └── detection.py        # PotholeTracker (YOLO + ByteTrack) y DetectionLog (CSV, recortes)
+      ├── detection.py        # PotholeTracker (en vivo) y DetectionLog
+      └── offline.py         # Tracking batch, interpolación GPX y exportación JSON
 ```
 
 El modelo provisional (YOLO11n, CC-BY-4.0, `tahaUgan/pothole-yolo11n`) se
 descarga solo la primera vez en `capture/models/`.
 
-## 9. Problemas comunes
+## 10. Problemas comunes
 
 - **No aparece la cámara:** probar otro puerto/cable USB (algunos solo cargan) y
   confirmar que esté en modo webcam/UVC.

@@ -58,8 +58,10 @@
 - **Objetivo**: Procesar videos completos, rastrear baches cuadro a cuadro y asociar coordenadas GPS.
 - **Entregables & Tecnologías** (`OpenCV`, `ByteTrack / BoT-SORT`, `gpxpy`):
   - Inferencia batch sobre video completo.
-  - Tracking multi-objeto con ByteTrack/BoT-SORT para asignar ID único por bache y evitar duplicados cuadro a cuadro.
-  - Interpolación lineal del track GPX para asignar latitud/longitud exacta al keyframe del bache.
+  - Tracking multi-objeto con ByteTrack para resumir detecciones por ID dentro de una sesión.
+  - Interpolación lineal del track GPX para asignar latitud/longitud al keyframe de mayor confianza, usando timestamps UTC de `frames.csv`.
+  - Exportación local de baches únicos y evidencia a `processed_potholes.json` y `crops/` mediante `capture/process_video.py`.
+- **Pendiente**: carga a Django, deduplicación espacial entre sesiones y calibración de desfase GPS.
 
 ## Fase 6 — Deduplicación Espacial
 - **Objetivo**: Evitar registros duplicados de un mismo bache entre diferentes pasadas por la misma ruta.
