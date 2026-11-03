@@ -1,29 +1,11 @@
-import math
+from django.contrib.gis.geos import Point
+from django.contrib.gis.measure import D
 from django.db.models import QuerySet
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Pothole
 from .serializers import PotholeSerializer
-
-
-def haversine_distance_meters(lat1, lon1, lat2, lon2):
-    """
-    Calcula la distancia del gran círculo en metros entre dos puntos
-    en la Tierra (latitud, longitud en grados decimales).
-    """
-    R = 6371000.0  # Radio medio de la Tierra en metros
-
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-
-    a = (math.sin(delta_phi / 2.0) ** 2 +
-         math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2)
-    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
-
-    return R * c
 
 
 class PotholeViewSet(viewsets.ModelViewSet):
@@ -45,7 +27,11 @@ class PotholeViewSet(viewsets.ModelViewSet):
         # Filtrado opcional por gravedad
         gravedad = self.request.GET.get('gravedad', None)
         if gravedad:
-            queryset = queryset.filter(gravedad__iexact=gravedad)
+            severities = [value.strip() for value in gravedad.split(",") if value.strip()]
+            if len(severities) > 1:
+                queryset = queryset.filter(gravedad__in=severities)
+            elif severities:
+                queryset = queryset.filter(gravedad__iexact=severities[0])
 
         # Filtrado espacial por radio de búsqueda (lat, lng, radio)
         lat_param = self.request.GET.get('lat', None)
@@ -57,29 +43,18 @@ class PotholeViewSet(viewsets.ModelViewSet):
                 center_lat = float(lat_param)
                 center_lng = float(lng_param)
                 radius_meters = float(radio_param) if radio_param is not None else 1000.0
-
-                # Pre-filtrado por bounding box aproximado (1 grado ~ 111 km)
-                delta_lat = radius_meters / 111000.0
-                # Ajuste de longitud por latitud
-                cos_lat = math.cos(math.radians(center_lat))
-                delta_lng = radius_meters / (111000.0 * max(abs(cos_lat), 0.00001))
-
-                queryset = queryset.filter(
-                    latitud__gte=center_lat - delta_lat,
-                    latitud__lte=center_lat + delta_lat,
-                    longitud__gte=center_lng - delta_lng,
-                    longitud__lte=center_lng + delta_lng
-                )
-
-                # Filtrado exacto con Haversine
-                filtered_ids = []
-                for bache in queryset:
-                    dist = haversine_distance_meters(center_lat, center_lng, bache.latitud, bache.longitud)
-                    if dist <= radius_meters:
-                        filtered_ids.append(bache.pk)
-
-                queryset = Pothole.objects.filter(id__in=filtered_ids)
+                if not (
+                    math.isfinite(center_lat)
+                    and math.isfinite(center_lng)
+                    and -90 <= center_lat <= 90
+                    and -180 <= center_lng <= 180
+                ):
+                    return queryset.none()
+                if not math.isfinite(radius_meters) or radius_meters < 0:
+                    return queryset.none()
+                center = Point(center_lng, center_lat, srid=4326)
+                queryset = queryset.filter(location__dwithin=(center, D(m=radius_meters)))
             except (ValueError, TypeError):
-                pass
+                return queryset.none()
 
         return queryset

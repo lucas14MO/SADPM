@@ -2,6 +2,10 @@
 
 Esta documentación describe la API REST desarrollada en **Django + Django REST Framework** para el mapa interactivo de baches de Encarnación.
 
+La base de desarrollo es PostgreSQL + PostGIS ejecutado mediante Docker Compose.
+Consulta [README.md](README.md) para crear el contenedor, configurar Django,
+aplicar migraciones e importar sesiones procesadas.
+
 ---
 
 ## URL Base
@@ -12,6 +16,14 @@ Esta documentación describe la API REST desarrollada en **Django + Django REST 
 ---
 
 ## Modelo de Datos (`Bache`)
+
+El JSON público de `Bache` conserva latitud y longitud como campos numéricos. En
+PostGIS, cada bache también tiene un punto `geography(Point, 4326)` indexado para
+consultas en metros. Las tablas internas `CaptureSession` y
+`PotholeObservation` conservan la procedencia por recorrido y las detecciones
+originales; los baches consolidados se recalculan con DBSCAN espacial al importar
+una sesión (`eps` inicial de 2.5 m). Las detecciones sin GPS no se incluyen en el
+clustering.
 
 Cada objeto bache retornado o enviado posee la siguiente estructura JSON:
 
