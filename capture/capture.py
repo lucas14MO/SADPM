@@ -26,10 +26,12 @@ os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")
 import cv2  # noqa: E402
 
 from spm_capture.cameras import choose_camera, device_name, list_cameras, open_camera
+from spm_capture.geometry import CALIBRATION_FILENAME, load_calibration
 from spm_capture.recorder import SessionRecorder
 
 WINDOW = "SPM - Captura (R: grabar/detener, Q: salir)"
 DEFAULT_OUT = Path(__file__).resolve().parent / "recordings"
+DEFAULT_CALIBRATION = Path(__file__).resolve().parent / CALIBRATION_FILENAME
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +46,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--record", action="store_true", help="Empezar a grabar inmediatamente.")
     p.add_argument("--no-preview", action="store_true", help="Sin ventana; requiere --record.")
     p.add_argument("--duration", type=float, help="Detener la grabación tras N segundos y salir.")
+    p.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION,
+                   help="Calibración de cámara a copiar en cada sesión "
+                        "(default: camera_calibration.json junto a este script, si existe).")
     p.add_argument("--max-index", type=int, default=10, help="Índices a sondear si no hay nombres.")
     return p.parse_args()
 
@@ -84,6 +89,17 @@ def main() -> int:
         print("--no-preview requiere --record.", file=sys.stderr)
         return 2
 
+    try:
+        calibration = load_calibration(args.calibration,
+                                       required=args.calibration != DEFAULT_CALIBRATION)
+    except (OSError, ValueError) as exc:
+        print(f"Calibración inválida: {exc}", file=sys.stderr)
+        return 1
+    if calibration is None:
+        print("Sin calibración de cámara (ver calibrate_camera.py); se grabará igual.")
+    else:
+        print(f"Calibración de cámara: {args.calibration}")
+
     if args.camera is None or args.list:
         print("Buscando cámaras...")
         cameras = list_cameras(args.max_index)
@@ -116,7 +132,7 @@ def main() -> int:
     recorder: SessionRecorder | None = None
 
     def start_recording() -> SessionRecorder:
-        rec = SessionRecorder(args.out, width, height, fps, camera_meta)
+        rec = SessionRecorder(args.out, width, height, fps, camera_meta, calibration)
         print(f"● Grabando en {rec.dir}")
         return rec
 

@@ -7,9 +7,16 @@ import json
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
+
+from .geometry import (
+    CALIBRATION_FILENAME,
+    CameraCalibration,
+    local_offset_m,
+    offset_position,
+)
 
 SEVERITY_CLASSES = ("pothole_light", "pothole_moderate", "pothole_critical")
 
@@ -29,6 +36,7 @@ class Observation:
     confidence: float
     box: tuple[int, int, int, int]
     crop: Any = field(repr=False)
+    frame_size: tuple[int, int] | None = None  # (ancho, alto) del fotograma
 
 
 @dataclass
@@ -37,7 +45,8 @@ class TrackSummary:
     observations: list[Observation] = field(default_factory=list)
 
     def to_record(self, min_frames: int, output_dir: Path,
-                  gpx_data: Sequence[GPSPoint]) -> dict[str, Any] | None:
+                  gpx_data: Sequence[GPSPoint],
+                  calibration: CameraCalibration | None = None) -> dict[str, Any] | None:
         if len(self.observations) < min_frames:
             return None
 
@@ -51,7 +60,7 @@ class TrackSummary:
             key=lambda name: (-votes[name], -confidence_by_class[name], class_index[name]),
         )
         best = max(self.observations, key=lambda item: item.confidence)
-        latitude, longitude = interpolate_gps_position(best.timestamp, gpx_data)
+        location = locate_track(self.observations, best, gpx_data, calibration)
         crop_dir = output_dir / "crops"
         crop_dir.mkdir(parents=True, exist_ok=True)
         crop_path = crop_dir / f"pothole_{self.track_id:04d}.jpg"
@@ -65,8 +74,7 @@ class TrackSummary:
                 sum(item.confidence for item in self.observations) / len(self.observations), 6
             ),
             "confidence_max": round(best.confidence, 6),
-            "latitude": latitude,
-            "longitude": longitude,
+            **location,
             "timestamp": best.timestamp.isoformat(timespec="milliseconds"),
             "frame_key": best.frame,
             "frames_detected": len(self.observations),
@@ -110,6 +118,105 @@ def interpolate_gps_position(
             )
         previous = current
     return None, None
+
+
+def estimate_heading(
+    timestamp: datetime,
+    gpx_data: Sequence[GPSPoint],
+    window_s: float = 1.0,
+    min_displacement_m: float = 2.0,
+    max_window_s: float = 8.0,
+) -> float | None:
+    """Rumbo del vehículo (grados desde el norte, sentido horario) en ``timestamp``.
+
+    Compara las posiciones interpoladas en ``t - ventana`` y ``t + ventana``; si
+    el vehículo se movió menos de ``min_displacement_m`` (detenido o ruido GPS)
+    duplica la ventana hasta ``max_window_s``. Devuelve ``None`` si no hay
+    desplazamiento suficiente para un rumbo fiable.
+    """
+    here = interpolate_gps_position(timestamp, gpx_data)
+    window = window_s
+    while window <= max_window_s:
+        delta = timedelta(seconds=window)
+        before = interpolate_gps_position(timestamp - delta, gpx_data)
+        after = interpolate_gps_position(timestamp + delta, gpx_data)
+        before = here if before[0] is None else before
+        after = here if after[0] is None else after
+        if before[0] is not None and after[0] is not None:
+            north, east = local_offset_m(before[0], before[1], after[0], after[1])
+            if math.hypot(north, east) >= min_displacement_m:
+                return math.degrees(math.atan2(east, north)) % 360
+        window *= 2
+    return None
+
+
+def _touches_border(box: tuple[int, int, int, int], width: int, height: int, margin: int = 2) -> bool:
+    x1, y1, x2, y2 = box
+    return x1 <= margin or y1 <= margin or x2 >= width - margin or y2 >= height - margin
+
+
+def locate_track(
+    observations: Sequence[Observation],
+    best: Observation,
+    gpx_data: Sequence[GPSPoint],
+    calibration: CameraCalibration | None,
+) -> dict[str, Any]:
+    """Ubica el bache de un track.
+
+    Sin calibración, la posición es la del GPS (antena) en el mejor fotograma,
+    como antes. Con calibración, cada observación se proyecta sobre la calzada
+    y se desplaza desde la posición del vehículo según su rumbo; el resultado es
+    el promedio ponderado por ``1 / (h² + d²)``, porque el error de la proyección
+    crece con el cuadrado de la distancia. Se prefieren las cajas que no tocan el
+    borde de la imagen (un bache cortado desplaza el centro de la caja).
+    """
+    offset = timedelta(seconds=calibration.time_offset_s if calibration else 0.0)
+    vehicle_latitude, vehicle_longitude = interpolate_gps_position(best.timestamp + offset, gpx_data)
+    location: dict[str, Any] = {
+        "latitude": vehicle_latitude,
+        "longitude": vehicle_longitude,
+        "location_method": "gps_vehicle",
+        "vehicle_latitude": vehicle_latitude,
+        "vehicle_longitude": vehicle_longitude,
+        "projected_samples": 0,
+    }
+    if calibration is None:
+        return location
+
+    clean: list[tuple[float, float, float]] = []
+    clipped: list[tuple[float, float, float]] = []
+    for item in observations:
+        if item.frame_size is None:
+            continue
+        width, height = item.frame_size
+        x1, y1, x2, y2 = item.box
+        projection = calibration.project_pixel((x1 + x2) / 2, (y1 + y2) / 2, width, height)
+        if projection is None:
+            continue
+        moment = item.timestamp + offset
+        latitude, longitude = interpolate_gps_position(moment, gpx_data)
+        if latitude is None or longitude is None:
+            continue
+        heading = estimate_heading(moment, gpx_data)
+        if heading is None:
+            continue
+        forward, right, distance = projection
+        point = offset_position(latitude, longitude, heading, forward, right)
+        weight = 1.0 / (calibration.camera_height_m ** 2 + distance ** 2)
+        target = clipped if _touches_border(item.box, width, height) else clean
+        target.append((point[0], point[1], weight))
+
+    samples = clean or clipped
+    if not samples:
+        return location
+    total = sum(weight for _, _, weight in samples)
+    location.update(
+        latitude=round(sum(lat * weight for lat, _, weight in samples) / total, 8),
+        longitude=round(sum(lon * weight for _, lon, weight in samples) / total, 8),
+        location_method="camera_projection",
+        projected_samples=len(samples),
+    )
+    return location
 
 
 def load_gpx(path: Path) -> list[GPSPoint]:
@@ -177,8 +284,15 @@ def process_session(
     image_size: int = 640,
     min_frames: int = 3,
     tracker: str = "bytetrack.yaml",
+    calibration_path: Path | None = None,
+    use_calibration: bool = True,
 ) -> Path:
-    """Ejecuta tracking persistente sobre el video y exporta los baches unicos."""
+    """Ejecuta tracking persistente sobre el video y exporta los baches unicos.
+
+    La calibración de cámara se toma de ``calibration_path`` o, si no se indica,
+    de ``camera_calibration.json`` dentro de la sesión. Sin calibración (o con
+    ``use_calibration=False``) se exporta la posición del GPS sin corregir.
+    """
     try:
         import cv2
     except ImportError as exc:
@@ -204,6 +318,16 @@ def process_session(
         gpx_path = candidates[0]
     elif not Path(gpx_path).is_file():
         raise FileNotFoundError(f"No existe el archivo GPX: {gpx_path}")
+
+    calibration: CameraCalibration | None = None
+    if use_calibration:
+        if calibration_path is None:
+            default_path = session_dir / CALIBRATION_FILENAME
+            calibration_path = default_path if default_path.is_file() else None
+        elif not Path(calibration_path).is_file():
+            raise FileNotFoundError(f"No existe el archivo de calibración: {calibration_path}")
+        if calibration_path is not None:
+            calibration = CameraCalibration.load(Path(calibration_path))
 
     timestamps = load_frame_timestamps(frames_path)
     gpx_data = load_gpx(Path(gpx_path))
@@ -266,6 +390,7 @@ def process_session(
                         float(score),
                         box,
                         _crop(frame, box),
+                        (width, height),
                     )
                     tracks.setdefault(track_id, TrackSummary(track_id)).observations.append(observation)
             frame_index += 1
@@ -275,7 +400,8 @@ def process_session(
     records = [
         record
         for track_id in sorted(tracks)
-        if (record := tracks[track_id].to_record(min_frames, session_dir, gpx_data)) is not None
+        if (record := tracks[track_id].to_record(min_frames, session_dir, gpx_data, calibration))
+        is not None
     ]
     output_path = session_dir / "processed_potholes.json"
     temporary_path = output_path.with_suffix(".json.tmp")
@@ -285,4 +411,10 @@ def process_session(
     temporary_path.replace(output_path)
     print(f"Video: {video_path.name} | FPS: {fps:.3f} | Frames: {frame_index}")
     print(f"Baches exportados: {len(records)} -> {output_path}")
+    if calibration is None:
+        print("Sin calibración de cámara: las coordenadas son las del GPS, sin offset.")
+    else:
+        projected = sum(record["location_method"] == "camera_projection" for record in records)
+        print(f"Calibración {calibration_path}: {projected}/{len(records)} baches con "
+              f"posición proyectada; el resto usa la posición del GPS.")
     return output_path

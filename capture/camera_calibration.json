@@ -1,0 +1,10 @@
+{
+  "camera_height_m": 1.35,
+  "pitch_deg": 1.462,
+  "hfov_deg": 118.15,
+  "forward_offset_m": 0.0,
+  "right_offset_m": 0.0,
+  "yaw_deg": 0.0,
+  "time_offset_s": 0.0,
+  "max_distance_m": 30.0
+}

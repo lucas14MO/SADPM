@@ -38,10 +38,12 @@ from spm_capture.detection import (  # noqa: E402
     draw_detections,
     ensure_model,
 )
+from spm_capture.geometry import CALIBRATION_FILENAME, load_calibration  # noqa: E402
 from spm_capture.recorder import AsyncVideoWriter, SessionRecorder  # noqa: E402
 
 WINDOW = "SPM - Deteccion (R: grabar/detener, Q: salir)"
 DEFAULT_OUT = Path(__file__).resolve().parent / "recordings"
+DEFAULT_CALIBRATION = Path(__file__).resolve().parent / CALIBRATION_FILENAME
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +64,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--out", type=Path, default=DEFAULT_OUT, help="Carpeta de salida.")
     p.add_argument("--record", action="store_true", help="Empezar a grabar inmediatamente.")
     p.add_argument("--no-preview", action="store_true", help="Sin ventana; requiere --record.")
+    p.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION,
+                   help="Calibración de cámara a copiar en cada sesión "
+                        "(default: camera_calibration.json junto a este script, si existe).")
     p.add_argument("--duration", type=float, help="Detener la sesión tras N segundos y salir.")
     return p.parse_args()
 
@@ -117,6 +122,17 @@ def main() -> int:
         print("--no-preview requiere --record.", file=sys.stderr)
         return 2
 
+    try:
+        calibration = load_calibration(args.calibration,
+                                       required=args.calibration != DEFAULT_CALIBRATION)
+    except (OSError, ValueError) as exc:
+        print(f"Calibración inválida: {exc}", file=sys.stderr)
+        return 1
+    if calibration is None:
+        print("Sin calibración de cámara (ver calibrate_camera.py); se grabará igual.")
+    else:
+        print(f"Calibración de cámara: {args.calibration}")
+
     if args.camera is None:
         print("Buscando cámaras...")
         cameras = list_cameras()
@@ -162,7 +178,7 @@ def main() -> int:
     log: DetectionLog | None = None
 
     def start_session() -> tuple[SessionRecorder, DetectionLog]:
-        rec = SessionRecorder(args.out, width, height, fps, camera_meta)
+        rec = SessionRecorder(args.out, width, height, fps, camera_meta, calibration)
         print(f"● Grabando en {rec.dir}")
         return rec, DetectionLog(rec.dir, width, height, fps, args.min_frames)
 

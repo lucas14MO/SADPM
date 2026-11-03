@@ -6,6 +6,8 @@ Cada sesión genera una carpeta con:
 - ``frames.csv``  — timestamp UTC de cada fotograma (``frame -> hora``), usado en
   la Fase 5 para interpolar la posición GPS de cada detección.
 - ``session.json`` — metadatos: cámara, resolución, fps medidos, inicio/fin UTC.
+- ``camera_calibration.json`` — (opcional) calibración del montaje de la cámara,
+  usada en la Fase 5 para corregir el offset entre la antena GPS y el bache.
 
 Los timestamps se calculan con un reloj monotónico anclado a la hora del sistema
 al inicio de la sesión, por lo que no saltan si el reloj del sistema se ajusta
@@ -24,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
+
+from .geometry import CALIBRATION_FILENAME, CameraCalibration
 
 
 def _iso(epoch: float) -> str:
@@ -66,6 +70,7 @@ class SessionRecorder:
         height: int,
         fps: float,
         camera: dict,
+        calibration: CameraCalibration | None = None,
     ) -> None:
         self.start_epoch = time.time()
         self._start_perf = time.perf_counter()
@@ -75,7 +80,10 @@ class SessionRecorder:
 
         self.width, self.height, self.fps = width, height, fps
         self.camera = camera
+        self.calibration = calibration
         self.frame_count = 0
+        if calibration is not None:
+            calibration.save(self.dir / CALIBRATION_FILENAME)
 
         self.video_path = self.dir / "video.mp4"
         self._writer = AsyncVideoWriter(self.video_path, fps, (width, height))
@@ -119,6 +127,7 @@ class SessionRecorder:
             "start_utc": _iso(self.start_epoch),
             "end_utc": _iso(self.start_epoch + duration),
             "clock_source": "system",
+            "calibration": self.calibration.to_dict() if self.calibration else None,
             **(extra or {}),
         }
         with open(self.dir / "session.json", "w", encoding="utf-8") as fh:

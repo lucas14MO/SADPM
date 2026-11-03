@@ -36,7 +36,10 @@ El backend de Django ya está desarrollado (`backend/`), pero falta el puente au
 
 #### Refinamiento Geométrico y Documentación (Opcional pero Recomendado)
 
-* **Compensación de posición (Offset de cámara):** Dado que la coordenada GPS registrada corresponde a la posición del teléfono/antena y el bache detectado está metros adelante en el campo de visión de la cámara, podrías investigar cómo proyectar un desplazamiento (*offset*) en la dirección de la marcha basándote en la velocidad y el *heading* del track GPS.
+* **Compensación de posición (Offset de cámara):** [✅ Implementado] Dado que la coordenada GPS registrada corresponde a la posición del teléfono/antena y el bache detectado está metros adelante en el campo de visión de la cámara, se proyecta un desplazamiento (*offset*) en la dirección de la marcha basándose en el *heading* del track GPS.
+  * `capture/calibrate_camera.py` genera `camera_calibration.json` (altura, inclinación y FOV de la cámara, offset cámara–antena, desfase de reloj) a partir de marcadores en el piso a distancias conocidas.
+  * `capture.py`/`detect.py` copian la calibración en cada sesión; `process_video.py` proyecta cada observación sobre la calzada (`spm_capture/geometry.py`) y exporta la posición corregida junto a la del vehículo (`location_method`, `vehicle_latitude`, `vehicle_longitude`).
+  * Pendiente: validar en campo contra baches con posición conocida (medida con GPS a pie) y, si se usa una cámara gran angular, agregar corrección de distorsión de lente.
 
 
 * **Documentación de hardware:** Documentar el protocolo exacto de montaje de la cámara en el vehículo y la configuración del GPS Logger utilizado en campo para asegurar repetibilidad.

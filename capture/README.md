@@ -46,7 +46,8 @@ Cada grabación crea `recordings/sesion_AAAAMMDD_HHMMSS/`:
 | --- | --- |
 | `video.mp4` | Video grabado. |
 | `frames.csv` | `frame, t_rel_s, epoch_s, utc` — hora UTC de cada fotograma. |
-| `session.json` | Cámara, resolución, fps nominal y real, duración, inicio/fin UTC. |
+| `session.json` | Cámara, resolución, fps nominal y real, duración, inicio/fin UTC y calibración usada. |
+| `camera_calibration.json` | Copia de la calibración de cámara vigente (si existe, ver más abajo). |
 
 `frames.csv` es la referencia para la Fase 5: para ubicar un bache detectado en
 el fotograma *N*, se busca su hora UTC y se interpola la posición en el `.gpx`.
@@ -117,6 +118,87 @@ elemento JSON contiene `track_id`, `severity`, `confidence_avg`,
 `confidence_max`, `latitude`, `longitude`, `timestamp` UTC, `frame_key`,
 `frames_detected` y `evidence_image` (ruta relativa). Este paso solo exporta
 datos localmente; no sube imágenes/API ni deduplica detecciones entre sesiones.
+
+Si la sesión tiene `camera_calibration.json` (o se indica `--calibration`),
+`latitude`/`longitude` son la posición **corregida del bache** y no la de la
+antena GPS (ver *Calibración del offset de cámara*). Cada elemento agrega:
+
+| Campo | Contenido |
+| --- | --- |
+| `location_method` | `camera_projection` (posición corregida) o `gps_vehicle` (posición del GPS sin corregir). |
+| `vehicle_latitude`, `vehicle_longitude` | Posición de la antena GPS en el mejor fotograma. |
+| `projected_samples` | Observaciones del track promediadas en la proyección. |
+
+`--no-calibration` exporta la posición del GPS aunque exista calibración.
+
+## Calibración del offset de cámara
+
+La coordenada del GPX es la de la antena (teléfono/módulo), pero el bache está
+varios metros adelante en la imagen: sin corrección, cada bache queda
+desplazado hacia atrás en el mapa (típicamente 5–15 m). La calibración describe
+cómo está montada la cámara para proyectar cada detección sobre la calzada.
+
+**Una vez por montaje** (si se mueve la cámara, recalibrar):
+
+1. Vehículo detenido en suelo plano. Medir:
+   - altura del lente sobre el piso (`--height`, m);
+   - posición de la cámara respecto de la antena GPS: metros hacia adelante
+     (`--forward-offset`, negativo si la cámara está detrás) y a la derecha
+     (`--right-offset`).
+2. Colocar 2–3 marcadores (conos, cinta) en el piso, delante de la cámara, a
+   distancias medidas **desde la vertical del lente** (ej. 4, 8 y 15 m).
+3. Grabar unos segundos con la misma resolución que se usará en campo y calibrar
+   haciendo clic sobre cada marcador:
+
+```powershell
+python calibrate_camera.py --video recordings/sesion_X/video.mp4 --height 1.35 `
+    --hfov 78 --marker 4 --marker 8 --marker 15 --forward-offset 1.2
+# Si no se conoce el FOV de la cámara, estimarlo con 2+ marcadores:
+python calibrate_camera.py --image frame.jpg --height 1.35 `
+    --marker 4 --marker 8 --marker 15 --solve-fov
+# Sin ventana: DIST:FILA (fila en píxeles del marcador)
+python calibrate_camera.py --image frame.jpg --height 1.35 --hfov 78 --no-gui `
+    --marker 4:944 --marker 8:733
+```
+
+Se informa el error de cada marcador (debe ser < 0,5 m) y se muestra la grilla
+de distancias proyectada (`--check grilla.jpg` la guarda). El resultado,
+`camera_calibration.json` junto a los scripts, tiene esta forma:
+
+```jsonc
+{
+  "camera_height_m": 1.35,     // altura del lente
+  "pitch_deg": 12.4,           // inclinación hacia abajo (calculada)
+  "hfov_deg": 78.0,            // campo de visión horizontal
+  "forward_offset_m": 1.2,     // cámara delante (+) de la antena GPS
+  "right_offset_m": 0.0,       // cámara a la derecha (+) de la antena
+  "yaw_deg": 0.0,              // giro de la cámara a la derecha (+)
+  "time_offset_s": 0.0,        // hora GPS − hora del equipo
+  "max_distance_m": 30.0       // proyecciones más lejanas se descartan
+}
+```
+
+`time_offset_s` corrige el desfase de reloj medido en el paso 4 del protocolo
+de sincronización: a 40 km/h, 0,5 s de desfase son ~5,5 m de error.
+
+`capture.py` y `detect.py` copian automáticamente `camera_calibration.json` a
+cada sesión (u otro archivo con `--calibration`), de modo que cada grabación
+conserva el montaje con que se hizo. `process_video.py` lo usa así:
+
+1. Proyecta el centro de la caja de cada observación sobre el piso (modelo
+   pinhole sobre suelo plano) y suma el offset de montaje.
+2. Calcula el rumbo del vehículo con el GPX (posiciones a ±1 s).
+3. Desplaza la posición de la antena según ese rumbo.
+4. Promedia las observaciones ponderando por `1 / (h² + d²)`: las cercanas son
+   mucho más precisas (1° de error de inclinación son ~0,4 m a 5 m, pero ~5 m a
+   20 m). Se prefieren las cajas que no tocan el borde de la imagen.
+
+Si el vehículo está detenido (sin rumbo fiable) o no hay proyecciones válidas,
+se usa la posición del GPS (`location_method: "gps_vehicle"`).
+
+Limitaciones: supone calzada plana, punto principal en el centro de la imagen y
+lente sin distorsión fuerte (cámaras gran angular/ojo de pez requieren
+corrección previa). El GPS de un teléfono tiene por sí mismo 3–5 m de error.
 
 ## Protocolo de sincronización con el GPS
 

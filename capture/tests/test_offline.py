@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -191,7 +192,34 @@ class OfflinePipelineTests(unittest.TestCase):
             self.assertEqual(records[0]["frame_key"], 1)
             self.assertEqual(records[0]["latitude"], -26.8)
             self.assertEqual(records[0]["longitude"], -54.8)
+            self.assertEqual(records[0]["location_method"], "gps_vehicle")
             self.assertTrue((session_dir / records[0]["evidence_image"]).is_file())
+
+            # Con camera_calibration.json en la sesión, la posición se proyecta hacia adelante.
+            (session_dir / "camera_calibration.json").write_text(
+                json.dumps({"camera_height_m": 1.5, "pitch_deg": 60.0, "hfov_deg": 90.0}),
+                encoding="utf-8",
+            )
+            capture.frame_index = 0
+            with patch.dict("sys.modules", {"cv2": fake_cv2, "ultralytics": fake_ultralytics,
+                                            "gpxpy": fake_gpxpy}):
+                process_session(session_dir, session_dir / "best.pt", min_frames=2)
+            projected = json.loads(output_path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(projected["location_method"], "camera_projection")
+            self.assertEqual(projected["vehicle_latitude"], -26.8)
+            # Se promedian las dos observaciones (vehículo en -27/-55 y -26.8/-54.8); como
+            # avanza hacia el noreste, el bache queda delante del punto medio de la antena.
+            self.assertEqual(projected["projected_samples"], 2)
+            self.assertGreater(projected["latitude"], -26.9)
+            self.assertGreater(projected["longitude"], -54.9)
+
+            with patch.dict("sys.modules", {"cv2": fake_cv2, "ultralytics": fake_ultralytics,
+                                            "gpxpy": fake_gpxpy}):
+                capture.frame_index = 0
+                process_session(session_dir, session_dir / "best.pt", min_frames=2,
+                                use_calibration=False)
+            raw = json.loads(output_path.read_text(encoding="utf-8"))[0]
+            self.assertEqual(raw["location_method"], "gps_vehicle")
 
 
 if __name__ == "__main__":

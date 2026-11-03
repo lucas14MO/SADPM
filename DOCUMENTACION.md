@@ -180,7 +180,10 @@ bache y su evidencia, pero `latitude`/`longitude` son `null`.
 
 La salida `processed_potholes.json` contiene una lista de objetos con
 `track_id`, `severity`, `confidence_avg`, `confidence_max`, `latitude`,
-`longitude`, `timestamp`, `frame_key`, `frames_detected` y `evidence_image`.
+`longitude`, `timestamp`, `frame_key`, `frames_detected`, `evidence_image`,
+`location_method`, `vehicle_latitude`, `vehicle_longitude` y `projected_samples`.
+Si la sesión tiene `camera_calibration.json`, `latitude`/`longitude` son la
+posición del bache proyectada desde la cámara (ver sección 7).
 Los recortes se guardan bajo `crops/`. Esta exportación local no realiza carga a
 Django ni deduplicación espacial entre sesiones. El módulo de implementación y
 opciones se documentan en [capture/README.md](capture/README.md).
@@ -193,7 +196,8 @@ opciones se documentan en [capture/README.md](capture/README.md).
 3. Iniciar la grabación (`capture.py` o `detect.py`).
 4. **Verificación de desfase:** filmar unos segundos la pantalla del GPS logger
    mostrando su hora y compararla con la hora de ese fotograma en `frames.csv`.
-   Si es mayor a ~0,5 s, anotarlo para corregirlo luego.
+   Si es mayor a ~0,5 s, registrarlo como `--time-offset` en
+   `calibrate_camera.py` (hora GPS − hora del equipo).
 5. Al terminar, detener la grabación y luego el logger. Guardar el `.gpx` / `.csv`
    **dentro de la carpeta de la sesión**.
 
@@ -216,11 +220,30 @@ confianza de cada track válido:
 La implementación está en `capture/spm_capture/offline.py`, usa `gpxpy` y se
 invoca con el comando documentado en la sección 5.
 
-Notas para la implementación real: a 1 Hz del GPS y ~40 km/h el vehículo avanza
-~11 m entre puntos, por eso interpolar y no tomar el punto más cercano; además
-la posición del GPS es la del dispositivo, no la del bache (que está unos metros
-adelante), lo que podría requerir un pequeño desplazamiento en la dirección de
-marcha.
+A 1 Hz del GPS y ~40 km/h el vehículo avanza ~11 m entre puntos, por eso se
+interpola y no se toma el punto más cercano.
+
+### Compensación del offset de cámara
+
+La posición del GPS es la de la antena, no la del bache, que se ve varios metros
+adelante. Con una calibración de cámara (`camera_calibration.json`, generada con
+`capture/calibrate_camera.py`) el procesador corrige la posición:
+
+1. Cada observación del track se proyecta sobre la calzada con un modelo pinhole
+   de suelo plano: el centro de la caja `(u, v)`, la altura del lente, la
+   inclinación (`pitch`) y el campo de visión dan la distancia adelante/derecha
+   desde la cámara; se suma el offset de montaje cámara–antena.
+2. El rumbo del vehículo se calcula del propio GPX (posiciones interpoladas en
+   `t ± 1 s`, ampliando la ventana si se movió menos de 2 m).
+3. El desplazamiento se rota según el rumbo y se suma a la posición de la antena
+   en ese instante (`t + time_offset_s`).
+4. La posición final es el promedio ponderado por `1 / (h² + d²)`: el error de
+   la proyección crece con el cuadrado de la distancia, así que las
+   observaciones cercanas pesan más. Se descartan las proyecciones más allá de
+   `max_distance_m` (30 m) y se prefieren las cajas que no tocan el borde.
+
+Si no hay calibración, rumbo (vehículo detenido) o ninguna proyección válida,
+se usa la posición del GPS como antes (`location_method = "gps_vehicle"`).
 
 ## 8. Integración futura con el backend
 

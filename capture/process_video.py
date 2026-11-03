@@ -21,6 +21,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-frames", type=int, default=3,
                         help="Observaciones minimas por track (default: 3).")
     parser.add_argument("--tracker", default="bytetrack.yaml", help="Tracker de Ultralytics.")
+    calibration = parser.add_mutually_exclusive_group()
+    calibration.add_argument("--calibration", type=Path,
+                             help="Calibración de cámara; por defecto, camera_calibration.json "
+                                  "de la sesión si existe.")
+    calibration.add_argument("--no-calibration", action="store_true",
+                             help="Exportar la posición del GPS sin corregir el offset de cámara.")
     return parser.parse_args()
 
 
@@ -35,6 +41,8 @@ def main() -> int:
             image_size=args.imgsz,
             min_frames=args.min_frames,
             tracker=args.tracker,
+            calibration_path=args.calibration,
+            use_calibration=not args.no_calibration,
         )
     except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
