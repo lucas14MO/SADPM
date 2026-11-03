@@ -68,6 +68,8 @@
 - **Entregables & Tecnologías** (`DBSCAN / Scikit-Learn`, `PostGIS ST_ClusterDBSCAN`):
   - Clustering de coordenadas geográficas dentro de un umbral de proximidad (ej. 2 - 3 metros).
   - Consolidación del bache representativo (mejor nivel de confianza / foto más nítida).
+- **Implementación en curso**: PostgreSQL/PostGIS en contenedor, observaciones por sesión y comando de importación/reconsolidación desde `processed_potholes.json`.
+- **Criterio inicial**: `eps=2.5 m`, configurable; preservar observaciones originales y excluir del clustering las que no tienen coordenadas.
 
 ## Fase 7 — Backend REST API & Base de Datos Espacial (Django + PostgreSQL)
 - **Objetivo**: Desarrollar la infraestructura servidora para almacenamiento y consulta espacial de baches.

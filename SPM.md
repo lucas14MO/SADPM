@@ -94,6 +94,7 @@ Crear una API REST en Django + PostgreSQL (PostGIS) para almacenar y consultar l
 ### T04GP - Deduplicación Espacial
 - Implementar algoritmo de clustering espacial (DBSCAN en Python o PostGIS ST_ClusterDBSCAN en PostgreSQL) sobre las coordenadas de baches detectados.
 - Unificar detecciones de un mismo bache registradas en diferentes pasadas o recorridos por la misma calle (radio de agrupación de 2-3 metros).
+- Base acordada: PostgreSQL + PostGIS en contenedor Docker Compose; se conservan observaciones por sesión y se recalculan baches consolidados con `eps=2.5 m` configurable.
 
 ### T05GP - Carga Masiva y Sincronización con Backend Django
 - Crear script de exportación automática que envía los baches deduplicados a la API REST de Django.

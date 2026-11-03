@@ -11,7 +11,7 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | 1 | Captura del GPS (`.gpx`) | ⚠️ Externo: se hace con una app/módulo GPS logger; **no hay código** |
 | 2 | Dataset y etiquetado | ⏳ Pendiente |
 | 3 | Entrenamiento propio | ⏳ Pendiente (hoy se usa un modelo público provisional) |
-| 4 | Clasificación de gravedad | ⏳ Pendiente |
+| 4 | Clasificación de gravedad | ✅ Implementada en el pipeline: `pothole_light`, `pothole_moderate`, `pothole_critical` |
 | 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`) |
 | 5 | **Georreferenciación offline (unir detecciones con GPS)** | ✅ Implementada en `capture/process_video.py` |
 | 6 | Deduplicación espacial (DBSCAN) | ⏳ Pendiente |
@@ -53,7 +53,9 @@ python detect.py --camera 1 --imgsz 480    # más fps, menos precisión en bache
 ```
 
 Opciones comunes: `--width/--height/--fps` (default 1920×1080 @ 30, MJPG),
-`--out` (carpeta de salida, default `capture/recordings`), `--no-mjpg`.
+`--out` (carpeta de salida; por defecto `capture/recordings`, pero puede
+configurarse desde el flujo de captura o por otra parte del proyecto),
+`--no-mjpg`.
 Opciones de `detect.py`: `--model` (pesos `.pt`), `--conf` (default 0.3),
 `--imgsz` (default 640), `--min-frames` (default 3, fotogramas mínimos para
 considerar válido un bache), `--tracker` (`bytetrack.yaml` o `botsort.yaml`),
@@ -61,9 +63,27 @@ considerar válido un bache), `--tracker` (`bytetrack.yaml` o `botsort.yaml`),
 
 ## 3. Qué se guarda y cómo
 
-Cada grabación crea una carpeta `capture/recordings/sesion_AAAAMMDD_HHMMSS/`.
-El nombre de la carpeta usa la **hora local** de la laptop (sólo es un nombre);
-los tiempos dentro de los archivos siempre son **UTC**.
+Cada grabación crea una carpeta de sesión bajo la ruta configurada por `--out`.
+Por defecto, la salida es `capture/recordings/sesion_AAAAMMDD_HHMMSS/`, pero la
+ubicación real puede depender del flujo de captura o de otra persona/componente
+que defina la carpeta destino. El nombre de la carpeta usa la **hora local** de
+la laptop (sólo es un nombre); los tiempos dentro de los archivos siempre son
+**UTC**.
+
+### 3.0 Clasificación de severidad de baches
+
+El pipeline actual usa tres clases explícitas del modelo y de la exportación
+offline:
+
+| Clase del modelo | Severidad | Uso |
+| --- | --- | --- |
+| `pothole_light` | leve | daño pequeño o superficial |
+| `pothole_moderate` | moderado | daño visible y más estructural |
+| `pothole_critical` | crítico | grieta profunda/daño importante |
+
+En la etapa offline, cada `track_id` se consolida por voto de clase y desempate
+por confianza acumulada; la salida final usa la clase ganadora en
+`severity` dentro de `processed_potholes.json`.
 
 | Archivo | Lo genera | Contenido |
 | --- | --- | --- |
