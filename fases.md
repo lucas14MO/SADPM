@@ -61,14 +61,14 @@
   - Tracking multi-objeto con ByteTrack para resumir detecciones por ID dentro de una sesión.
   - Interpolación lineal del track GPX para asignar latitud/longitud al keyframe de mayor confianza, usando timestamps UTC de `frames.csv`.
   - Exportación local de baches únicos y evidencia a `processed_potholes.json` y `crops/` mediante `capture/process_video.py`.
-- **Pendiente**: carga a Django, deduplicación espacial entre sesiones y calibración de desfase GPS.
+- **Estado**: georreferenciación offline implementada. Importación a Django y deduplicación al importar están implementadas en Fase 6/7; falta validar una demo integral con datos reales. La calibración geométrica requiere valores medidos para cada montaje.
 
 ## Fase 6 — Deduplicación Espacial
 - **Objetivo**: Evitar registros duplicados de un mismo bache entre diferentes pasadas por la misma ruta.
 - **Entregables & Tecnologías** (`DBSCAN / Scikit-Learn`, `PostGIS ST_ClusterDBSCAN`):
   - Clustering de coordenadas geográficas dentro de un umbral de proximidad (ej. 2 - 3 metros).
   - Consolidación del bache representativo (mejor nivel de confianza / foto más nítida).
-- **Implementación en curso**: PostgreSQL/PostGIS en contenedor, observaciones por sesión y comando de importación/reconsolidación desde `processed_potholes.json`.
+- **Implementado**: PostgreSQL/PostGIS en contenedor, observaciones por sesión y comando `import_processed_potholes` desde `processed_potholes.json`; la importación reconstruye consolidados con `ST_ClusterDBSCAN`.
 - **Criterio inicial**: `eps=2.5 m`, configurable; preservar observaciones originales y excluir del clustering las que no tienen coordenadas.
 
 ## Fase 7 — Backend REST API & Base de Datos Espacial (Django + PostgreSQL)
@@ -76,7 +76,7 @@
 - **Entregables & Tecnologías** (`Django`, `Django REST Framework`, `PostgreSQL + PostGIS`):
   - Modelos de datos para Baches (geometría Point, gravedad, foto_url, confianza, timestamp).
   - Endpoints REST para consulta geoespacial: baches por radio/bounding box.
-  - Script de ingesta / carga masiva desde el pipeline de video hacia la API.
+  - Comando de importación de sesiones procesadas a la base espacial (`backend/potholes/management/commands/import_processed_potholes.py`). No es una carga HTTP a la API; la integración con el mapa/API debe configurarse y verificarse.
 
 ## Fase 8 — Frontend Mapa Interactivo (React + Leaflet.js)
 - **Objetivo**: Construir la interfaz de usuario interactiva para visualización del estado de las calles.
@@ -89,6 +89,7 @@
 ## Fase 9 — Integración End-to-End, Pruebas y Presentación
 - **Objetivo**: Conectar todo el pipeline desde la entrada de video hasta la renderización en el mapa.
 - **Entregables**:
-  - Script de ejecución orquestada end-to-end (`Video + GPX` ➔ `YOLO + Tracking` ➔ `Georreferenciación + Deduplicación` ➔ `Django API` ➔ `React Map`).
-  - Validación general con videos de prueba de calles reales de Encarnación.
-  - Documentación final del proyecto y manual de demostración.
+  - Ejecutar y documentar el flujo (`Video + GPX` ➔ `YOLO + Tracking` ➔ `Georreferenciación` ➔ importación/PostGIS con deduplicación ➔ API ➔ React Map). La importación backend existe; no consta una orquestación automática ni validación integral con sesión real.
+  - Validar con videos de calles reales de Encarnación y registrar resultados/limitaciones.
+  - Completar registro real del montaje y GPS Logger en la guía de campo de `DOCUMENTACION.md`.
+  - Revisar el manual de uso y preparar la demo después de ejecutar el flujo completo.
