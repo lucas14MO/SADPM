@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="700" viewBox="0 0 920 700">
+  <rect width="920" height="700" fill="#fff"/>
+  <text x="470" y="24" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="bold">Prediction</text>
+  <text x="20" y="390" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="bold" transform="rotate(-90 20 390)">Ground Truth</text>
+  <image href="matris_confusion.png" x="280" y="100" width="577" height="578"/>
+  <g font-family="sans-serif" font-size="14" text-anchor="start">
+    <text x="426" y="96" transform="rotate(-38 426 96)">pothole_critical</text>
+    <text x="496" y="96" transform="rotate(-38 496 96)">pothole_light</text>
+    <text x="568" y="96" transform="rotate(-38 568 96)">pothole_moderate</text>
+    <text x="640" y="96" transform="rotate(-38 640 96)">false_negative</text>
+  </g>
+  <g font-family="sans-serif" font-size="14" text-anchor="end">
+    <text x="270" y="255">pothole_critical</text>
+    <text x="270" y="327">pothole_light</text>
+    <text x="270" y="400">pothole_moderate</text>
+    <text x="270" y="472">false_positive</text>
+  </g>
+</svg>
