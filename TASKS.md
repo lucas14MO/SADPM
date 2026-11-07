@@ -1,45 +1,24 @@
-#### Fase 6: Deduplicación Espacial (DBSCAN) [⏳ Pendiente]
+# Tareas pendientes
 
-Actualmente, el script `process_video.py` exporta los baches únicos *por sesión* en `processed_potholes.json`, pero no resuelve qué pasa si el vehículo pasa dos veces por la misma calle en sesiones diferentes.
+> Las pruebas con datos reales quedan pendientes hasta disponer de una sesión
+> de video y su GPX. No intentar cerrar la validación end-to-end ni registrar
+> métricas de campo sin esos datos.
 
-* **Implementar clustering geográfico:** Desarrollar un script (o un proceso en el backend) que lea las coordenadas (`latitude`, `longitude`) de las detecciones, preferiblemente usando `PostGIS ST_ClusterDBSCAN` o `scikit-learn DBSCAN`.
-* **Definir umbral de proximidad:** Establecer un radio (ej. 2 a 3 metros) para considerar que múltiples detecciones corresponden al mismo bache físico.
-* **Lógica de consolidación:** Cuando se agrupen baches duplicados, programar la lógica para conservar el registro con la mayor confianza (`confidence_max`) o la imagen (`evidence_image`) más clara, descartando los demás.
+## 7. Modelo: origen, dataset y métricas — Baja
 
+- [x] Registrar la procedencia reportada de V3, arquitectura, dataset descrito y métricas disponibles en [weights/IA_Models.md](weights/IA_Models.md).
+- [x] Registrar URL/identificador, iteración de entrenamiento, versión de dataset, tipo y latencia Cloud API de Roboflow en [IA_Models.md](weights/IA_Models.md).
+- [x] Registrar la licencia reportada del modelo (AGPL-3.0).
+- [ ] Confirmar si la licencia cubre también dataset/pesos, conseguir el checkpoint de Roboflow o verificar `weights/weights.pt` contra él, y guardar el checksum.
+- [x] Añadir el mAP@50-95 (16,9%) y documentar la matriz de confusión con sus etiquetas y conteos en [IA_Models.md](weights/IA_Models.md).
+- [ ] Conservar los reportes fuente de evaluación y aclarar si precisión, recall y F1 son globales, por clase o promedio, incluyendo el umbral usado; pendiente recuperar los artefactos de evaluación.
+- [ ] Cuando haya videos propios, etiquetar fotogramas en Roboflow o CVAT y, si hay tiempo, reentrenar. Separar train/valid/test por recorrido para evitar fuga de fotogramas similares.
 
+## 9. Documentación y presentación — Baja
 
-#### Fase 9: Integración End-to-End (Ingesta al Backend) [⏳ Pendiente]
-
-El backend de Django ya está desarrollado (`backend/`), pero falta el puente automatizado entre los resultados de la Fase 5 y la API.
-
-* **Desarrollar script de ingesta (Data Loader):** Crear un script (ej. `upload_to_api.py`) que lea el archivo `processed_potholes.json` generado en la Fase 5.
-
-
-* **Mapeo de datos para la API:**
-* Traducir la clase `severity` de YOLO (`pothole_light`, `pothole_moderate`, `pothole_critical`) a las opciones esperadas por Django (`leve`, `moderado`, `critico`).
-
-
-* Mapear `utc` del `mejor_frame` al campo `timestamp_deteccion`.
-
-
-* Mapear `confianza_max` a `confianza`.
-
-
-* Asegurar que las imágenes de evidencia (`crops/bache_NNNN.jpg`) se carguen correctamente al *endpoint* mediante solicitudes `multipart/form-data`.
-
-
-
-
-* **Manejo de excepciones GPS:** Programar la lógica para ignorar o manejar de forma especial los baches que quedaron fuera de la cobertura del `.gpx` y tienen `latitude`/`longitude` nulas (`null`).
-
-
-
-#### Refinamiento Geométrico y Documentación (Opcional pero Recomendado)
-
-* **Compensación de posición (Offset de cámara):** [✅ Implementado] Dado que la coordenada GPS registrada corresponde a la posición del teléfono/antena y el bache detectado está metros adelante en el campo de visión de la cámara, se proyecta un desplazamiento (*offset*) en la dirección de la marcha basándose en el *heading* del track GPS.
-  * `capture/calibrate_camera.py` genera `camera_calibration.json` (altura, inclinación y FOV de la cámara, offset cámara–antena, desfase de reloj) a partir de marcadores en el piso a distancias conocidas.
-  * `capture.py`/`detect.py` copian la calibración en cada sesión; `process_video.py` proyecta cada observación sobre la calzada (`spm_capture/geometry.py`) y exporta la posición corregida junto a la del vehículo (`location_method`, `vehicle_latitude`, `vehicle_longitude`).
-  * Pendiente: validar en campo contra baches con posición conocida (medida con GPS a pie) y, si se usa una cámara gran angular, agregar corrección de distorsión de lente.
-
-
-* **Documentación de hardware:** Documentar el protocolo exacto de montaje de la cámara en el vehículo y la configuración del GPS Logger utilizado en campo para asegurar repetibilidad.
+- [x] Corregir estados de deduplicación e importación: DBSCAN espacial está implementado en el backend y `import_processed_potholes` importa sesiones procesadas y reconstruye consolidados.
+- [x] Añadir protocolo reproducible de sincronización GPS y guía de montaje/calibración de cámara a [DOCUMENTACION.md](DOCUMENTACION.md). Las medidas reales del montaje y los ajustes del logger deben anotarse en campo; no están en el repositorio.
+- [ ] **Conectar el mapa a la API real — Media.** En `frontend/.env.local`, configurar `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` con la URL base del backend (por ejemplo `http://127.0.0.1:8000/api`). Luego verificar marcadores por color, filtro de severidad y panel con foto del bache.
+- [ ] **Prueba completa con datos reales — pendiente de video/GPX.** Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
+- [ ] Completar la ficha de campo con dispositivo/app, configuración real del GPS Logger, precisión/frecuencia reportada y medidas reales del montaje cámara–antena (requiere levantamiento en campo).
+- [ ] Preparar y revisar el manual de uso durante una ejecución completa siguiendo [DOCUMENTACION.md](DOCUMENTACION.md), incluida la importación descrita en `backend/README.md` (validación práctica pendiente de datos reales).

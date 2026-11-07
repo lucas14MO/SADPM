@@ -9,15 +9,15 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | --- | --- | --- |
 | 1 | Captura de video + timestamps por fotograma | ✅ Hecho (`capture/capture.py`) |
 | 1 | Captura del GPS (`.gpx`) | ⚠️ Externo: se hace con una app/módulo GPS logger; **no hay código** |
-| 2 | Dataset y etiquetado | ⏳ Pendiente |
-| 3 | Entrenamiento propio | ⏳ Pendiente (hoy se usa un modelo público provisional) |
+| 2 | Dataset y etiquetado | ⚠️ V3 entrenado con dataset comunitario de Roboflow; falta conservar su versión/licencia y evaluar datos propios |
+| 3 | Entrenamiento propio | ✅ V3 registrado; procedencia del checkpoint sin trazabilidad reproducible (ver [IA_Models.md](weights/IA_Models.md)) |
 | 4 | Clasificación de gravedad | ✅ Implementada en el pipeline: `pothole_light`, `pothole_moderate`, `pothole_critical` |
 | 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`) |
 | 5 | **Georreferenciación offline (unir detecciones con GPS)** | ✅ Implementada en `capture/process_video.py` |
-| 6 | Deduplicación espacial (DBSCAN) | ⏳ Pendiente |
+| 6 | Deduplicación espacial (DBSCAN) | ✅ Implementada al importar/reconstruir en Django/PostGIS (`eps=2.5 m` inicial) |
 | 7 | Backend Django REST | ✅ Hecho (`backend/`, ver [API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)) |
 | 8 | Frontend mapa (React + Leaflet) | ✅ Base hecha con datos mock (`frontend/`) |
-| 9 | Integración end-to-end | ⏳ Pendiente |
+| 9 | Integración end-to-end | ⚠️ Importación backend implementada; demo completa y conexión frontend/backend por validar |
 
 > **Importante:** la captura no guarda coordenadas GPS en `video.mp4`; la Fase 5
 > las asigna después mediante el `.gpx` y el timestamp UTC por fotograma de
@@ -245,12 +245,15 @@ adelante. Con una calibración de cámara (`camera_calibration.json`, generada c
 Si no hay calibración, rumbo (vehículo detenido) o ninguna proyección válida,
 se usa la posición del GPS como antes (`location_method = "gps_vehicle"`).
 
-## 8. Integración futura con el backend
+## 8. Importación al backend
 
-La exportación actual no llama a la API. Una futura ingesta a
-`POST /api/baches/` ([API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)) deberá
-mapear las clases del modelo a los valores aceptados por Django (`leve`,
-`moderado`, `critico`) y omitir o resolver los baches sin coordenadas:
+La exportación local no llama directamente a la API. La importación implementada
+se hace con el comando `import_processed_potholes` documentado en
+[`backend/README.md`](backend/README.md): valida y mapea las clases del modelo a
+`leve`, `moderado`, `critico`, conserva observaciones y reconstruye los baches
+consolidados. Las detecciones sin coordenadas se conservan como observaciones,
+pero no aparecen en el clustering espacial. El endpoint público se describe en
+[`API_DOCUMENTATION.md`](backend/API_DOCUMENTATION.md).
 
 | Campo de la API | De dónde saldrá |
 | --- | --- |
@@ -277,8 +280,10 @@ capture/
       └── offline.py         # Tracking batch, interpolación GPX y exportación JSON
 ```
 
-El modelo provisional (YOLO11n, CC-BY-4.0, `tahaUgan/pothole-yolo11n`) se
-descarga solo la primera vez en `capture/models/`.
+El flujo en vivo `detect.py` puede descargar su modelo predeterminado
+YOLO11n (`tahaUgan/pothole-yolo11n`) la primera vez en `capture/models/`.
+El procesamiento offline usa el archivo indicado por `--model`, por ejemplo
+`../weights/weights.pt`; son rutas/modelos distintos.
 
 ## 10. Problemas comunes
 
@@ -287,3 +292,62 @@ descarga solo la primera vez en `capture/models/`.
 - **"No se pudo abrir la cámara":** cerrar Zoom, Teams, el navegador o la app Cámara.
 - **fps bajos:** poca luz sube la exposición y baja los fps; USB 2.0 limita la
   resolución sin MJPG. En `detect.py`, bajar `--imgsz`.
+
+## 11. Guía de montaje y registro de campo
+
+No hay en el repositorio medidas verificadas del vehículo, cámara o logger usado
+en una salida. Registrar estos datos en cada campaña; no asumir como medidas
+reales los valores de ejemplo del calibrador.
+
+### Montaje y calibración de cámara
+
+Fijar la cámara mirando al frente, centrada y rígida para evitar vibración y
+cambios de inclinación. Evitar que el soporte obstruya la calzada. Medir desde
+la calzada hasta el centro del lente (`camera_height_m`), la posición de cámara
+respecto a la antena GPS (`forward_offset_m`, `right_offset_m`), el giro lateral
+(`yaw`) y la inclinación hacia abajo (`pitch`). Registrar resolución, lente/FOV,
+vehículo y fotos del montaje. Estos son parámetros medidos en campo, no valores
+universales.
+
+Calibrar en suelo plano con marcadores a distancias conocidas y el vehículo
+detenido. Seguir los ejemplos de `capture/calibrate_camera.py`; guardar la salida
+como `capture/camera_calibration.json`, revisar la grilla de distancias con
+`--check` y confirmar que la sesión copie la calibración. Medir también el
+desfase horario de cámara/GPS y pasarlo como `--time-offset` (hora GPS menos
+hora del equipo). Validar luego la ubicación proyectada contra puntos conocidos.
+
+### GPS Logger y sincronización
+
+El proyecto no fija una app/dispositivo GPS Logger ni sus ajustes: confirmar y
+anotar en la hoja de campo el nombre y versión, dispositivo, formato GPX, zona
+horaria UTC, frecuencia de registro, modo de precisión/alta exactitud, permisos
+de ubicación y si el registro continúa con pantalla apagada. Mantener activados
+los servicios de ubicación y esperar un fix estable antes de iniciar el vídeo.
+El pipeline espera timestamps GPX con zona horaria y une por UTC.
+
+Antes de grabar, sincronizar el reloj del equipo, iniciar el logger y registrar
+unos segundos su reloj visible en el video. Grabar la ruta; al terminar, detener
+ambos y copiar exactamente un `.gpx` a la carpeta de sesión. Si se detecta
+desfase, documentarlo y configurar la calibración. Revisar cobertura GPX y
+`frames.csv` antes de importar.
+
+### Procedimiento de demo y uso
+
+1. Preparar entorno de captura e identificar cámara con `python capture.py --list`.
+2. En recorrido controlado, iniciar GPX y video/detección; conservar la carpeta
+   completa de sesión y el GPX.
+3. Procesar desde `capture/` con el modelo documentado en
+   [IA_Models.md](weights/IA_Models.md):
+   `python process_video.py recordings/<sesion> --model ../weights/weights.pt`.
+4. Revisar `processed_potholes.json`, recortes, coordenadas y cobertura temporal.
+5. Iniciar PostGIS/API según [backend/README.md](backend/README.md) e importar la
+   sesión con `import_processed_potholes` (incluyendo el volumen de solo lectura
+   como allí se indica). Mostrar el número importado y consolidado.
+6. Abrir el mapa y verificar los baches de la API, severidad, ubicación y
+   evidencia. El frontend usa datos mock si `VITE_USE_MOCK_DATA` no es `false`;
+   configurar `VITE_API_BASE_URL` según el entorno.
+
+Para cerrar la demo, registrar fecha, sesión usada, versión del modelo, parámetros
+de procesamiento, resultado de importación, URL del mapa y limitaciones
+observadas. La demo end-to-end todavía requiere ejecución y validación con datos
+reales; esta guía describe el procedimiento, no afirma que ya se haya probado.
