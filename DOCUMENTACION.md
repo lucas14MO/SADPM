@@ -9,19 +9,51 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | --- | --- | --- |
 | 1 | Captura de video + timestamps por fotograma | ✅ Hecho (`capture/capture.py`) |
 | 1 | Captura del GPS (`.gpx`) | ⚠️ Externo: se hace con una app/módulo GPS logger; **no hay código** |
-| 2 | Dataset y etiquetado | ⚠️ V3 entrenado con dataset comunitario de Roboflow; falta conservar su versión/licencia y evaluar datos propios |
-| 3 | Entrenamiento propio | ✅ V3 registrado; procedencia del checkpoint sin trazabilidad reproducible (ver [IA_Models.md](weights/IA_Models.md)) |
-| 4 | Clasificación de gravedad | ✅ Implementada en el pipeline: `pothole_light`, `pothole_moderate`, `pothole_critical` |
+| 2 | Dataset y etiquetado | ⚠️ V4 reporta 386 imágenes (143 propias, 243 públicas seleccionadas); split y evaluación pendientes |
+| 3 | Entrenamiento propio | ✅ V3 histórico y V4 YOLO26 Small monoclass registrados; métricas/licencia V4 por verificar (ver [IA_Models.md](weights/IA_Models.md)) |
+| 4 | ROI de asfalto y severidad por área relativa | ✅ Implementado en `process_video.py`; parámetros provisionales, falta calibración de campo |
 | 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`) |
 | 5 | **Georreferenciación offline (unir detecciones con GPS)** | ✅ Implementada en `capture/process_video.py` |
 | 6 | Deduplicación espacial (DBSCAN) | ✅ Implementada al importar/reconstruir en Django/PostGIS (`eps=2.5 m` inicial) |
-| 7 | Backend Django REST | ✅ Hecho (`backend/`, ver [API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)) |
-| 8 | Frontend mapa (React + Leaflet) | ✅ Base hecha con datos mock (`frontend/`) |
+| 7 | Backend Django REST | ✅ Importación, persistencia de evidencia y feedback implementados; migración PostGIS aún por aplicar/verificar |
+| 8 | Frontend mapa (React + Leaflet) | ✅ Cliente API y acciones de feedback implementados; build pendiente por falta de Node/npm |
 | 9 | Integración end-to-end | ⚠️ Importación backend implementada; demo completa y conexión frontend/backend por validar |
 
 > **Importante:** la captura no guarda coordenadas GPS en `video.mp4`; la Fase 5
 > las asigna después mediante el `.gpx` y el timestamp UTC por fotograma de
 > `frames.csv`.
+
+### Criterio implementado y validación pendiente
+
+El procesamiento offline usa YOLO como detector monoclass (`pothole`) y fuente
+de confianza; ROI y severidad se calculan después con reglas deterministas.
+Los valores actuales son configurables y provisionales: la lógica tiene pruebas
+sintéticas, pero aún no se calibró ni validó con una sesión visual completa.
+
+- **ROI del asfalto:** para una imagen de ancho `W` y alto `H`, calcular el
+   centroide vertical `Y_center = (y1 + y2) / 2` de cada caja y descartar la
+   detección si `Y_center < 0.45 × H`. El límite es inicial y configurable; la
+   ROI debe validarse para el encuadre real de cada montaje.
+- **Severidad por área:** calcular `A = (x2 - x1) × (y2 - y1)` y
+   `A_norm = A / (W × H) × f(Y_center)`. El procesador actual usa
+   `f(y) = ((y_ref-y_roi)/(y-y_roi))^p`, limitado cerca del horizonte; `y_ref`,
+   `y_roi` y `p` son configurables y requieren calibración por montaje.
+- **Keyframe:** calcular la severidad sobre un keyframe representativo del
+   track: mayor área de caja dentro de la ROI, desempate por confianza. Severidad,
+   crop anotado, timestamp y posición usan la misma observación.
+- **Mapeo:** `A_norm < Umbral_Leve` produce `leve`; entre `Umbral_Leve` y
+   `Umbral_Crítico`, `moderado`; desde `Umbral_Crítico`, `critico`. Los umbrales
+   deben calibrarse antes de reportar resultados de campo. Defaults actuales:
+   ROI `0.45`, umbrales `0.001`/`0.005`, referencia `0.7` y exponente `2.0`;
+   son valores provisionales, no resultados experimentales.
+   La confianza del modelo se conserva como dato separado de la severidad.
+- **Evidencia y feedback:** el detalle del mapa mostrará el recorte del keyframe
+   con su caja dibujada y permitirá reportar falso positivo o bache
+   reparado/desactualizado. El objetivo backend es ocultar o marcar inválido un
+   bache con al menos 3 reportes de falso positivo, o un reporte de
+   reparado/desactualizado. Backend y UI ya incluyen persistencia/endpoint y
+   controles idempotentes por UUID de navegador; la migración aún requiere
+   aplicarse en el entorno PostGIS y el flujo debe probarse integrado.
 
 ## 2. Cómo se usa
 
@@ -52,6 +84,9 @@ python detect.py --camera 1 --conf 0.4     # más confianza mínima = menos fals
 python detect.py --camera 1 --imgsz 480    # más fps, menos precisión en baches chicos
 ```
 
+Este flujo en vivo conserva su modelo y comportamiento actuales. V4 monoclass
+se activa en el procesamiento offline con `process_video.py`, no en `detect.py`.
+
 Opciones comunes: `--width/--height/--fps` (default 1920×1080 @ 30, MJPG),
 `--out` (carpeta de salida; por defecto `capture/recordings`, pero puede
 configurarse desde el flujo de captura o por otra parte del proyecto),
@@ -70,10 +105,9 @@ que defina la carpeta destino. El nombre de la carpeta usa la **hora local** de
 la laptop (sólo es un nombre); los tiempos dentro de los archivos siempre son
 **UTC**.
 
-### 3.0 Clasificación de severidad de baches
+### 3.0 Compatibilidad con el modelo V3 multiclase
 
-El pipeline actual usa tres clases explícitas del modelo y de la exportación
-offline:
+El modelo anterior V3 (`weights/weights.pt`) predice tres clases explícitas:
 
 | Clase del modelo | Severidad | Uso |
 | --- | --- | --- |
@@ -81,9 +115,10 @@ offline:
 | `pothole_moderate` | moderado | daño visible y más estructural |
 | `pothole_critical` | crítico | grieta profunda/daño importante |
 
-En la etapa offline, cada `track_id` se consolida por voto de clase y desempate
-por confianza acumulada; la salida final usa la clase ganadora en
-`severity` dentro de `processed_potholes.json`.
+Las sesiones V3 existentes conservan etiquetas legacy y el importador las
+mapea a severidades canónicas. El procesamiento offline actual usa V4
+monoclass; la severidad exportada (`leve`, `moderado`, `critico`) no procede de
+la clase YOLO.
 
 | Archivo | Lo genera | Contenido |
 | --- | --- | --- |
@@ -163,29 +198,31 @@ video **no** equivale al tiempo real. La única referencia confiable es `frames.
 ## 5. Procesamiento offline de Fase 5
 
 Desde `capture/`, instalar `requirements.txt` y procesar una carpeta de sesión
-con un modelo entrenado que contenga `pothole_light`, `pothole_moderate` y
-`pothole_critical`:
+con el modelo YOLO26 Small monoclass V4 (`pothole`):
 
 ```bash
-python process_video.py recordings/sesion_AAAAMMDD_HHMMSS --model ../weights/weights.pt
+python process_video.py recordings/sesion_AAAAMMDD_HHMMSS
 ```
 
 La sesión requiere `video.mp4`, `frames.csv` y exactamente un `.gpx` (o se pasa
-con `--gpx`). La inferencia recorre el video con ByteTrack (`persist=True`),
-resume cada `track_id` por voto de clase y desempata por confianza agregada.
-Solo se exportan tracks observados al menos `--min-frames` veces (default 3).
-El keyframe es la observación de confianza máxima; su hora se toma de `frames.csv`
-y se interpola linealmente en GPX. Fuera de la cobertura GPX se conservan el
-bache y su evidencia, pero `latitude`/`longitude` son `null`.
+con `--gpx`). La inferencia usa ByteTrack (`persist=True`) y la clase `pothole`.
+Descarta centros por encima del horizonte ROI y exige al menos `--min-frames`
+observaciones válidas (default 3). Selecciona la caja de mayor área y desempata
+por confianza; calcula severidad mediante `A_norm`, con parámetros configurables
+en CLI cuyos defaults aún son provisionales. El timestamp de ese keyframe se
+toma de `frames.csv` y se interpola linealmente en GPX. Fuera de la cobertura GPX
+se conserva el bache y evidencia, con `latitude`/`longitude` en `null`.
 
 La salida `processed_potholes.json` contiene una lista de objetos con
-`track_id`, `severity`, `confidence_avg`, `confidence_max`, `latitude`,
-`longitude`, `timestamp`, `frame_key`, `frames_detected`, `evidence_image`,
-`location_method`, `vehicle_latitude`, `vehicle_longitude` y `projected_samples`.
+`track_id`, severidad canónica, `area_norm`, `confidence_avg`, `confidence_max`,
+`confidence_keyframe`, `latitude`, `longitude`, `timestamp`, `frame_key`,
+`frames_detected`, `evidence_image`, `location_method`, `vehicle_latitude`,
+`vehicle_longitude` y `projected_samples`.
 Si la sesión tiene `camera_calibration.json`, `latitude`/`longitude` son la
 posición del bache proyectada desde la cámara (ver sección 7).
-Los recortes se guardan bajo `crops/`. Esta exportación local no realiza carga a
-Django ni deduplicación espacial entre sesiones. El módulo de implementación y
+Los recortes anotados se guardan como `crops/bache_NNNN.jpg`. La exportación
+local no llama la API; el comando Django importa la sesión, copia evidencia a
+MEDIA y reconstruye la deduplicación espacial. El módulo de implementación y
 opciones se documentan en [capture/README.md](capture/README.md).
 
 ## 6. Protocolo de sincronización con el GPS (en campo)
@@ -208,10 +245,10 @@ se une **después**, por hora UTC. El `.gpx` guarda puntos `<trkpt lat lon>` con
 `<time>` en UTC, igual formato de hora que `frames.csv`, y por eso se pueden cruzar.
 
 El procesador offline implementa interpolación lineal para el keyframe de mayor
-confianza de cada track válido:
+área de caja dentro de la ROI (desempate por confianza) de cada track válido:
 
 1. Por cada `track_id` con suficientes observaciones, tomar el timestamp UTC del
-   frame con confianza máxima, consultándolo en `frames.csv`.
+   frame seleccionado por área máxima, consultándolo en `frames.csv`.
 2. En el `.gpx`, buscar los dos puntos que la rodean: `t0 ≤ t ≤ t1`.
 3. Interpolar: `f = (t − t0) / (t1 − t0)`, `lat = lat0 + f·(lat1 − lat0)`, `lon` igual.
 4. Guardar lat/lon en `processed_potholes.json`; si el timestamp queda fuera del
@@ -237,10 +274,10 @@ adelante. Con una calibración de cámara (`camera_calibration.json`, generada c
    `t ± 1 s`, ampliando la ventana si se movió menos de 2 m).
 3. El desplazamiento se rota según el rumbo y se suma a la posición de la antena
    en ese instante (`t + time_offset_s`).
-4. La posición final es el promedio ponderado por `1 / (h² + d²)`: el error de
-   la proyección crece con el cuadrado de la distancia, así que las
-   observaciones cercanas pesan más. Se descartan las proyecciones más allá de
-   `max_distance_m` (30 m) y se prefieren las cajas que no tocan el borde.
+4. Se usa la proyección del keyframe representativo para mantener coordenada,
+   severidad, evidencia y timestamp asociados a la misma observación. Se
+   descartan proyecciones más allá de `max_distance_m` (30 m); si el keyframe no
+   tiene proyección válida se recurre a la posición del GPS (`gps_vehicle`).
 
 Si no hay calibración, rumbo (vehículo detenido) o ninguna proyección válida,
 se usa la posición del GPS como antes (`location_method = "gps_vehicle"`).
@@ -249,19 +286,25 @@ se usa la posición del GPS como antes (`location_method = "gps_vehicle"`).
 
 La exportación local no llama directamente a la API. La importación implementada
 se hace con el comando `import_processed_potholes` documentado en
-[`backend/README.md`](backend/README.md): valida y mapea las clases del modelo a
-`leve`, `moderado`, `critico`, conserva observaciones y reconstruye los baches
-consolidados. Las detecciones sin coordenadas se conservan como observaciones,
-pero no aparecen en el clustering espacial. El endpoint público se describe en
+[`backend/README.md`](backend/README.md): valida severidad canónica V4 y las
+etiquetas legacy V3, conserva observaciones, copia imágenes a MEDIA y reconstruye
+los baches consolidados. Las detecciones sin coordenadas se conservan como
+observaciones, pero no aparecen en el clustering espacial. El endpoint público se describe en
 [`API_DOCUMENTATION.md`](backend/API_DOCUMENTATION.md).
+
+El modelo incorpora `area_norm`, evidencia persistente, contadores y visibilidad.
+La API acepta feedback idempotente por bache/tipo/UUID; 3 reportes de falso
+positivo o uno de reparación ocultan el bache. La migración `0003` está aplicada
+en la base PostGIS del entorno de desarrollo; los tests backend usan una base
+temporal.
 
 | Campo de la API | De dónde saldrá |
 | --- | --- |
 | `latitud`, `longitud` | Interpolación GPX (sección 6) |
-| `timestamp_deteccion` | `utc` del `mejor_frame` |
+| `timestamp_deteccion` | `utc` del keyframe de mayor área dentro de ROI |
 | `confianza` | `confianza_max` de `tracks.csv` |
 | `imagen` | `crops/bache_NNNN.jpg` |
-| `gravedad` | Mapear `pothole_light/moderate/critical` a `leve/moderado/critico` |
+| `gravedad` | Severidad determinista de `area_norm`; las etiquetas V3 se admiten por compatibilidad |
 | `radio_estimado` | Fase 4 (pendiente) |
 
 ## 9. Estructura del código de captura

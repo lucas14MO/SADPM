@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.contrib.gis.geos import Point
+from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -15,6 +16,9 @@ from potholes.services.deduplication import rebuild_consolidated_potholes
 
 
 SEVERITY_MAP = {
+    "leve": "leve",
+    "moderado": "moderado",
+    "critico": "critico",
     "pothole_light": "leve",
     "pothole_moderate": "moderado",
     "pothole_critical": "critico",
@@ -85,15 +89,27 @@ class Command(BaseCommand):
             seen_track_ids = set()
             for record in records:
                 validated = self._validate_record(record, session_dir)
+                evidence_file_path = validated.pop("evidence_file_path")
                 track_id = validated["track_id"]
                 if track_id in seen_track_ids:
                     raise CommandError(f"track_id duplicado en JSON: {track_id}")
                 seen_track_ids.add(track_id)
-                PotholeObservation.objects.update_or_create(
+                observation, _ = PotholeObservation.objects.update_or_create(
                     session=capture_session,
                     track_id=track_id,
                     defaults=validated,
                 )
+                if evidence_file_path:
+                    evidence_hash = hashlib.sha256(evidence_file_path.read_bytes()).hexdigest()[:16]
+                    evidence_name = f"session_{capture_session.pk}_track_{track_id}_{evidence_hash}.jpg"
+                    current_evidence_name = Path(observation.evidence_image.name or "").name
+                    if current_evidence_name != evidence_name:
+                        with evidence_file_path.open("rb") as evidence_file:
+                            observation.evidence_image.save(
+                                evidence_name,
+                                File(evidence_file),
+                                save=True,
+                            )
                 imported += 1
 
             if seen_track_ids:
@@ -116,6 +132,8 @@ class Command(BaseCommand):
             severity = SEVERITY_MAP[model_severity]
             confidence_avg = float(record["confidence_avg"])
             confidence_max = float(record["confidence_max"])
+            area_norm_raw = record.get("area_norm")
+            area_norm = None if area_norm_raw is None else float(area_norm_raw)
             frames_detected = int(record["frames_detected"])
             frame_key = int(record["frame_key"])
             timestamp = datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
@@ -128,6 +146,8 @@ class Command(BaseCommand):
             raise CommandError("Las confianzas deben estar entre 0 y 1.")
         if confidence_avg > confidence_max:
             raise CommandError("confidence_avg no puede superar confidence_max.")
+        if area_norm is not None and (not math.isfinite(area_norm) or area_norm < 0):
+            raise CommandError("area_norm debe ser un número finito no negativo.")
         if timezone.is_naive(timestamp):
             raise CommandError("timestamp debe incluir zona horaria.")
         latitude, longitude = record.get("latitude"), record.get("longitude")
@@ -146,6 +166,7 @@ class Command(BaseCommand):
             location = Point(longitude, latitude, srid=4326)
 
         evidence_path = ""
+        evidence_file_path = None
         relative_evidence = record.get("evidence_image")
         if relative_evidence:
             if not isinstance(relative_evidence, str):
@@ -156,14 +177,18 @@ class Command(BaseCommand):
             if not candidate.is_file():
                 raise CommandError(f"No existe la evidencia indicada: {relative_evidence}")
             evidence_path = str(candidate)
+            evidence_file_path = candidate
 
         return {
+            "track_id": track_id,
             "severity": severity,
             "confidence_avg": confidence_avg,
             "confidence_max": confidence_max,
+            "area_norm": area_norm,
             "frames_detected": frames_detected,
             "timestamp": timestamp,
             "frame_key": frame_key,
             "location": location,
             "evidence_path": evidence_path,
+            "evidence_file_path": evidence_file_path,
         }

@@ -1,4 +1,9 @@
-import type { Pothole, PotholeQueryParams } from '../types/pothole';
+import type {
+  FeedbackType,
+  Pothole,
+  PotholeFeedbackResult,
+  PotholeQueryParams,
+} from '../types/pothole';
 
 /**
  * Contrato que debe cumplir cualquier fuente de datos de baches, sea mock o real.
@@ -6,4 +11,5 @@ import type { Pothole, PotholeQueryParams } from '../types/pothole';
  */
 export interface PotholeService {
   getPotholes(params?: PotholeQueryParams): Promise<Pothole[]>;
+  submitFeedback(id: string, type: FeedbackType): Promise<PotholeFeedbackResult>;
 }

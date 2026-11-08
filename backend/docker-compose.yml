@@ -2,59 +2,37 @@ services:
   postgis:
     image: postgis/postgis:16-3.5
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-sadpm}
       POSTGRES_USER: ${POSTGRES_USER:-sadpm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sadpm-local}
     volumes:
       - postgis_data:/var/lib/postgresql/data
-    networks:
-      - backend_internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 12
 
-  django:
+  frontend:
     build:
-      context: .
+      context: ../frontend
       dockerfile: Dockerfile
     restart: unless-stopped
+    init: true
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sadpm}
-      POSTGRES_USER: ${POSTGRES_USER:-sadpm}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sadpm-local}
-      POSTGRES_HOST: postgis
-      POSTGRES_PORT: 5432
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-development-only-change-me}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
-    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+      VITE_USE_MOCK_DATA: "false"
+      VITE_API_BASE_URL: "http://127.0.0.1:${DJANGO_PORT:-8000}/api"
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
     ports:
-      - "127.0.0.1:${DJANGO_PORT:-8000}:8000"
+      - "127.0.0.1:5173:5173"
     volumes:
-      - media_data:/app/media
-    depends_on:
-      postgis:
-        condition: service_healthy
-    networks:
-      - backend_internal
-    healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/baches/', timeout=3).read()"
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
 
 volumes:
   postgis_data:
   media_data:
-
-networks:
-  backend_internal:
-    internal: true
+  frontend_node_modules:

@@ -1,11 +1,16 @@
+import math
+
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
+from django.db import connection, transaction
 from django.db.models import QuerySet
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from .models import Pothole
-from .serializers import PotholeSerializer
+from .models import Pothole, PotholeFeedback
+from .serializers import PotholeFeedbackSerializer, PotholeSerializer
 
 
 class PotholeViewSet(viewsets.ModelViewSet):
@@ -22,7 +27,7 @@ class PotholeViewSet(viewsets.ModelViewSet):
     serializer_class = PotholeSerializer
 
     def get_queryset(self) -> QuerySet[Pothole]:  # type: ignore[override]
-        queryset = Pothole.objects.all()
+        queryset = Pothole.objects.filter(is_visible=True)
 
         # Filtrado opcional por gravedad
         gravedad = self.request.GET.get('gravedad', None)
@@ -58,3 +63,41 @@ class PotholeViewSet(viewsets.ModelViewSet):
                 return queryset.none()
 
         return queryset
+
+    @action(detail=True, methods=["post"], url_path="feedback", permission_classes=[AllowAny])
+    def feedback(self, request, pk=None):
+        serializer = PotholeFeedbackSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(527438291)")
+            pothole = get_object_or_404(
+                Pothole.objects.select_for_update().filter(is_visible=True), pk=pk
+            )
+            _, created = PotholeFeedback.objects.get_or_create(
+                pothole=pothole,
+                feedback_type=serializer.validated_data["feedback_type"],
+                client_token=serializer.validated_data["client_token"],
+            )
+            pothole.false_positive_reports = PotholeFeedback.objects.filter(
+                pothole=pothole, feedback_type=PotholeFeedback.FALSE_POSITIVE
+            ).count()
+            pothole.repaired_reports = PotholeFeedback.objects.filter(
+                pothole=pothole, feedback_type=PotholeFeedback.REPAIRED
+            ).count()
+            pothole.is_visible = (
+                pothole.false_positive_reports < 3 and pothole.repaired_reports == 0
+            )
+            pothole.save(update_fields=[
+                "false_positive_reports", "repaired_reports", "is_visible"
+            ])
+
+        return Response(
+            {
+                "created": created,
+                "false_positive_reports": pothole.false_positive_reports,
+                "repaired_reports": pothole.repaired_reports,
+                "is_visible": pothole.is_visible,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )

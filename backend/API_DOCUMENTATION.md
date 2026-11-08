@@ -39,10 +39,14 @@ Cada objeto bache retornado o enviado posee la siguiente estructura JSON:
     "lng": -55.86667
   },
   "confianza": 0.94,
+  "area_norm": 0.012,
   "timestamp_deteccion": "2026-09-01T14:30:00Z",
   "imagen": null,
   "url_imagen_externa": "https://images.unsplash.com/...",
   "url_imagen": "https://images.unsplash.com/...",
+  "false_positive_reports": 0,
+  "repaired_reports": 0,
+  "is_visible": true,
   "created_at": "2026-09-06T16:00:00Z",
   "updated_at": "2026-09-06T16:00:00Z"
 }
@@ -59,10 +63,14 @@ Cada objeto bache retornado o enviado posee la siguiente estructura JSON:
 | `longitud` | Float | Coordenada geográfica de longitud. |
 | `coordenadas` | Object | Objeto derivado `{ "lat": Float, "lng": Float }` optimizado para Leaflet.js. |
 | `confianza` | Float | Confianza del modelo de detección IA entre `0.0` y `1.0`. |
+| `area_norm` | Float / null | Área normalizada usada por el clasificador determinista de severidad. |
 | `timestamp_deteccion` | ISO Datetime | Fecha y hora en que se registró el bache. |
 | `imagen` | File / URL | Archivo de imagen subido al servidor Django. |
 | `url_imagen_externa` | String (URL) | URL remota opcional de la imagen. |
 | `url_imagen` | String (URL) | URL absoluta pública resolver para la visualización en el mapa/modal. |
+| `false_positive_reports` | Integer | Reportes ciudadanos de falso positivo. |
+| `repaired_reports` | Integer | Reportes de reparación/desactualización. |
+| `is_visible` | Boolean | Si el bache sigue visible en consultas públicas. |
 
 ---
 
@@ -168,6 +176,30 @@ Retorna el objeto bache creado con su `id` asignado.
 - **Método**: `DELETE`
 - **Endpoint**: `/api/baches/{id}/`
 - **Respuesta**: `24 No Content`
+
+### 6. Enviar feedback ciudadano
+
+- **Método**: `POST`
+- **Endpoint**: `/api/baches/{id}/feedback/`
+- **Autenticación**: no requiere cuenta; recibe un UUID estable generado por el
+  navegador para limitar reportes repetidos ordinarios (no es control antifraude).
+
+```json
+{
+  "feedback_type": "false_positive",
+  "client_token": "4c0992b7-3eed-40ae-ae9a-566ef0373ad0"
+}
+```
+
+`feedback_type` acepta `false_positive` o `repaired`. La combinación de bache,
+tipo y token es idempotente. Al llegar a 3 reportes distintos de falso positivo
+o al primer reporte de reparación, `is_visible` pasa a `false` y el bache deja de
+aparecer en la lista pública. La respuesta incluye `created`, ambos contadores y
+`is_visible`.
+
+Los reportes pertenecen al bache consolidado. Al reconstruir clusters espaciales,
+se reasocian al nuevo grupo con mayor solapamiento de observaciones; en caso de
+división se asignan a un único grupo para evitar duplicar votos.
 
 ---
 

@@ -7,6 +7,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from spm_capture.geometry import (
     CameraCalibration,
@@ -149,13 +150,31 @@ class LocateTrackTests(unittest.TestCase):
         location = locate_track(observations, observations[0], self.track, self.calibration)
 
         self.assertEqual(location["location_method"], "camera_projection")
-        self.assertEqual(location["projected_samples"], 3)
+        self.assertEqual(location["projected_samples"], 1)
         north, east = local_offset_m(-27.0, -55.0, location["latitude"], location["longitude"])
         self.assertAlmostEqual(north, 50.0, delta=0.3)
         self.assertAlmostEqual(east, 0.0, delta=0.05)
         vehicle_north, _ = local_offset_m(-27.0, -55.0, location["vehicle_latitude"],
                                           location["vehicle_longitude"])
         self.assertAlmostEqual(vehicle_north, 20.0, delta=0.01)
+
+    def test_calibrated_location_projects_only_the_selected_keyframe(self) -> None:
+        observations = [self.observation(2.0, 20.0), self.observation(3.0, 10.0)]
+        best = observations[1]
+        with patch("spm_capture.offline.CameraCalibration.project_pixel",
+                   return_value=(12.0, 0.0, 12.0)) as project_pixel, \
+             patch("spm_capture.offline.estimate_heading", return_value=0.0), \
+             patch("spm_capture.offline.offset_position", return_value=(-26.9, -54.9)):
+            location = locate_track(observations, best, self.track, self.calibration)
+
+        project_pixel.assert_called_once_with(
+            (best.box[0] + best.box[2]) / 2,
+            (best.box[1] + best.box[3]) / 2,
+            WIDTH,
+            HEIGHT,
+        )
+        self.assertEqual(location["projected_samples"], 1)
+        self.assertEqual((location["latitude"], location["longitude"]), (-26.9, -54.9))
 
     def test_time_offset_shifts_gps_lookup(self) -> None:
         calibration = CameraCalibration(1.5, 10.0, 90.0, time_offset_s=1.0)

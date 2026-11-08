@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import json
 import math
-from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,7 +17,50 @@ from .geometry import (
     offset_position,
 )
 
-SEVERITY_CLASSES = ("pothole_light", "pothole_moderate", "pothole_critical")
+POTHOLE_CLASS = "pothole"
+
+
+@dataclass(frozen=True)
+class SeverityConfig:
+    roi_horizon_ratio: float = 0.45
+    light_area_threshold: float = 0.001
+    critical_area_threshold: float = 0.005
+    perspective_reference_ratio: float = 0.7
+    perspective_exponent: float = 2.0
+    perspective_min_distance_ratio: float = 0.05
+
+    def __post_init__(self) -> None:
+        values = (
+            self.roi_horizon_ratio,
+            self.light_area_threshold,
+            self.critical_area_threshold,
+            self.perspective_reference_ratio,
+            self.perspective_exponent,
+            self.perspective_min_distance_ratio,
+        )
+        if not all(math.isfinite(value) for value in values):
+            raise ValueError("La configuración de severidad debe contener valores finitos.")
+        if not 0 <= self.roi_horizon_ratio < 1:
+            raise ValueError("roi_horizon_ratio debe estar en [0, 1).")
+        if not 0 < self.light_area_threshold < self.critical_area_threshold:
+            raise ValueError("Los umbrales de área deben ser positivos y estar ordenados.")
+        if not self.roi_horizon_ratio < self.perspective_reference_ratio <= 1:
+            raise ValueError("perspective_reference_ratio debe estar entre el horizonte ROI y 1.")
+        if self.perspective_exponent <= 0 or self.perspective_min_distance_ratio <= 0:
+            raise ValueError("Los parámetros de perspectiva deben ser positivos.")
+
+    def area_factor(self, center_y: float, frame_height: int) -> float:
+        y_ratio = center_y / frame_height
+        distance = max(y_ratio - self.roi_horizon_ratio, self.perspective_min_distance_ratio)
+        reference_distance = self.perspective_reference_ratio - self.roi_horizon_ratio
+        return (reference_distance / distance) ** self.perspective_exponent
+
+    def severity_for(self, area_norm: float) -> str:
+        if area_norm < self.light_area_threshold:
+            return "leve"
+        if area_norm < self.critical_area_threshold:
+            return "moderado"
+        return "critico"
 
 
 @dataclass(frozen=True)
@@ -36,7 +78,22 @@ class Observation:
     confidence: float
     box: tuple[int, int, int, int]
     crop: Any = field(repr=False)
-    frame_size: tuple[int, int] | None = None  # (ancho, alto) del fotograma
+    frame_size: tuple[int, int]  # (ancho, alto) del fotograma
+
+    @property
+    def box_area(self) -> int:
+        x1, y1, x2, y2 = self.box
+        return max(0, x2 - x1) * max(0, y2 - y1)
+
+    def is_in_roi(self, config: SeverityConfig) -> bool:
+        _, height = self.frame_size
+        _, y1, _, y2 = self.box
+        return (y1 + y2) / 2 >= config.roi_horizon_ratio * height
+
+    def normalized_area(self, config: SeverityConfig) -> float:
+        width, height = self.frame_size
+        center_y = (self.box[1] + self.box[3]) / 2
+        return self.box_area / (width * height) * config.area_factor(center_y, height)
 
 
 @dataclass
@@ -46,38 +103,34 @@ class TrackSummary:
 
     def to_record(self, min_frames: int, output_dir: Path,
                   gpx_data: Sequence[GPSPoint],
-                  calibration: CameraCalibration | None = None) -> dict[str, Any] | None:
-        if len(self.observations) < min_frames:
+                  calibration: CameraCalibration | None = None,
+                  severity_config: SeverityConfig = SeverityConfig()) -> dict[str, Any] | None:
+        observations = [item for item in self.observations if item.is_in_roi(severity_config)]
+        if len(observations) < min_frames:
             return None
 
-        votes = Counter(item.label for item in self.observations)
-        confidence_by_class: dict[str, float] = defaultdict(float)
-        for item in self.observations:
-            confidence_by_class[item.label] += item.confidence
-        class_index = {name: index for index, name in enumerate(SEVERITY_CLASSES)}
-        label = min(
-            votes,
-            key=lambda name: (-votes[name], -confidence_by_class[name], class_index[name]),
-        )
-        best = max(self.observations, key=lambda item: item.confidence)
-        location = locate_track(self.observations, best, gpx_data, calibration)
+        best = max(observations, key=lambda item: (item.box_area, item.confidence))
+        area_norm = best.normalized_area(severity_config)
+        location = locate_track(observations, best, gpx_data, calibration)
         crop_dir = output_dir / "crops"
         crop_dir.mkdir(parents=True, exist_ok=True)
-        crop_path = crop_dir / f"pothole_{self.track_id:04d}.jpg"
+        crop_path = crop_dir / f"bache_{self.track_id:04d}.jpg"
         if best.crop is None or best.crop.size == 0 or not _save_crop(crop_path, best.crop):
             raise OSError(f"No se pudo guardar la evidencia: {crop_path}")
 
         return {
             "track_id": self.track_id,
-            "severity": label,
+            "severity": severity_config.severity_for(area_norm),
+            "area_norm": round(area_norm, 8),
             "confidence_avg": round(
-                sum(item.confidence for item in self.observations) / len(self.observations), 6
+                sum(item.confidence for item in observations) / len(observations), 6
             ),
-            "confidence_max": round(best.confidence, 6),
+            "confidence_max": round(max(item.confidence for item in observations), 6),
+            "confidence_keyframe": round(best.confidence, 6),
             **location,
             "timestamp": best.timestamp.isoformat(timespec="milliseconds"),
             "frame_key": best.frame,
-            "frames_detected": len(self.observations),
+            "frames_detected": len(observations),
             "evidence_image": crop_path.relative_to(output_dir).as_posix(),
         }
 
@@ -163,12 +216,9 @@ def locate_track(
 ) -> dict[str, Any]:
     """Ubica el bache de un track.
 
-    Sin calibración, la posición es la del GPS (antena) en el mejor fotograma,
-    como antes. Con calibración, cada observación se proyecta sobre la calzada
-    y se desplaza desde la posición del vehículo según su rumbo; el resultado es
-    el promedio ponderado por ``1 / (h² + d²)``, porque el error de la proyección
-    crece con el cuadrado de la distancia. Se prefieren las cajas que no tocan el
-    borde de la imagen (un bache cortado desplaza el centro de la caja).
+    Sin calibración, la posición es la del GPS (antena) en el mejor fotograma.
+    Con calibración, solo se proyecta la observación ``best`` para mantener
+    posición, severidad, evidencia y timestamp asociados al mismo keyframe.
     """
     offset = timedelta(seconds=calibration.time_offset_s if calibration else 0.0)
     vehicle_latitude, vehicle_longitude = interpolate_gps_position(best.timestamp + offset, gpx_data)
@@ -185,9 +235,7 @@ def locate_track(
 
     clean: list[tuple[float, float, float]] = []
     clipped: list[tuple[float, float, float]] = []
-    for item in observations:
-        if item.frame_size is None:
-            continue
+    for item in (best,):
         width, height = item.frame_size
         x1, y1, x2, y2 = item.box
         projection = calibration.project_pixel((x1 + x2) / 2, (y1 + y2) / 2, width, height)
@@ -267,6 +315,14 @@ def _crop(frame: Any, box: tuple[int, int, int, int], margin: float = 0.15) -> A
                  max(0, x1 - margin_x):min(width, x2 + margin_x)].copy()
 
 
+def _annotated_crop(frame: Any, box: tuple[int, int, int, int]) -> Any:
+    import cv2
+
+    annotated = frame.copy()
+    cv2.rectangle(annotated, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 2)
+    return _crop(annotated, box)
+
+
 def _save_crop(path: Path, crop: Any) -> bool:
     try:
         import cv2
@@ -286,6 +342,7 @@ def process_session(
     tracker: str = "bytetrack.yaml",
     calibration_path: Path | None = None,
     use_calibration: bool = True,
+    severity_config: SeverityConfig = SeverityConfig(),
 ) -> Path:
     """Ejecuta tracking persistente sobre el video y exporta los baches unicos.
 
@@ -339,9 +396,9 @@ def process_session(
     model = YOLO(str(model_path))
     names = model.names
     name_by_id = {int(key): str(value) for key, value in names.items()} if isinstance(names, dict) else dict(enumerate(names))
-    class_ids = [class_id for class_id, name in name_by_id.items() if name in SEVERITY_CLASSES]
-    if len(class_ids) != len(SEVERITY_CLASSES):
-        raise ValueError(f"El modelo debe tener estas clases: {', '.join(SEVERITY_CLASSES)}")
+    class_ids = [class_id for class_id, name in name_by_id.items() if name == POTHOLE_CLASS]
+    if len(class_ids) != 1 or len(name_by_id) != 1:
+        raise ValueError(f"El modelo debe tener una única clase: {POTHOLE_CLASS}")
 
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -378,18 +435,21 @@ def process_session(
                 coordinates = boxes.xyxy.tolist()
                 for track_id, class_id, score, raw_box in zip(ids, classes, confidences, coordinates):
                     label = name_by_id[class_id]
-                    if label not in SEVERITY_CLASSES:
+                    if label != POTHOLE_CLASS:
                         continue
                     height, width = frame.shape[:2]
                     x1, y1, x2, y2 = (int(round(value)) for value in raw_box)
                     box = (max(0, x1), max(0, y1), min(width, x2), min(height, y2))
+                    if box[2] <= box[0] or box[3] <= box[1]:
+                        continue
+                    observation_crop = _annotated_crop(frame, box)
                     observation = Observation(
                         frame_index,
                         timestamps[frame_index],
                         label,
                         float(score),
                         box,
-                        _crop(frame, box),
+                        observation_crop,
                         (width, height),
                     )
                     tracks.setdefault(track_id, TrackSummary(track_id)).observations.append(observation)
@@ -400,7 +460,9 @@ def process_session(
     records = [
         record
         for track_id in sorted(tracks)
-        if (record := tracks[track_id].to_record(min_frames, session_dir, gpx_data, calibration))
+        if (record := tracks[track_id].to_record(
+            min_frames, session_dir, gpx_data, calibration, severity_config
+        ))
         is not None
     ]
     output_path = session_dir / "processed_potholes.json"

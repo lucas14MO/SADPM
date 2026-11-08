@@ -1,18 +1,40 @@
 import json
 import tempfile
+import uuid
 from pathlib import Path
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from potholes.models import CaptureSession, Pothole, PotholeObservation
+from potholes.models import CaptureSession, Pothole, PotholeFeedback, PotholeObservation
 from potholes.management.commands.import_processed_potholes import Command
 
 
 class ImportValidationTests(SimpleTestCase):
+    def test_accepts_canonical_severity_and_area_norm(self):
+        record = SpatialDatabaseTests._record(1, -27.33, -55.86)
+        record["severity"] = "moderado"
+        record["area_norm"] = 0.0125
+
+        with tempfile.TemporaryDirectory() as directory:
+            validated = Command()._validate_record(record, Path(directory))
+
+        self.assertEqual(validated["severity"], "moderado")
+        self.assertEqual(validated["area_norm"], 0.0125)
+
+    def test_rejects_invalid_area_norm(self):
+        for area_norm in (-0.1, float("nan"), float("inf")):
+            with self.subTest(area_norm=area_norm):
+                record = SpatialDatabaseTests._record(1, -27.33, -55.86)
+                record["area_norm"] = area_norm
+                with tempfile.TemporaryDirectory() as directory:
+                    with self.assertRaises(CommandError):
+                        Command()._validate_record(record, Path(directory))
+
     def test_rejects_out_of_range_coordinates(self):
         record = SpatialDatabaseTests._record(1, 91, -55.86)
         with tempfile.TemporaryDirectory() as directory:
@@ -39,6 +61,11 @@ class SpatialDatabaseTests(TestCase):
     databases = {"default"}
 
     def setUp(self):
+        self.media_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.media_dir.cleanup)
+        media_settings = override_settings(MEDIA_ROOT=self.media_dir.name)
+        media_settings.enable()
+        self.addCleanup(media_settings.disable)
         from django.db import connection
 
         if connection.vendor != "postgresql":
@@ -51,6 +78,9 @@ class SpatialDatabaseTests(TestCase):
         session_dir.mkdir()
         (session_dir / "processed_potholes.json").write_text(
             json.dumps(records), encoding="utf-8"
+        )
+        (session_dir / "session.json").write_text(
+            json.dumps({"start_utc": "2026-10-26T12:00:00+00:00"}), encoding="utf-8"
         )
         return session_dir
 
@@ -77,19 +107,84 @@ class SpatialDatabaseTests(TestCase):
     def test_import_is_idempotent_and_keeps_cluster_primary_key_stable(self):
         run_a = self._create_session_dir("run-a", [self._record(1, -27.33, -55.86)])
         call_command("import_processed_potholes", str(run_a), verbosity=0)
+        old_cluster_id = Pothole.objects.get(is_consolidated=True).pk
+        feedback_token = uuid.uuid4()
+        PotholeFeedback.objects.create(
+            pothole_id=old_cluster_id,
+            feedback_type=PotholeFeedback.FALSE_POSITIVE,
+            client_token=feedback_token,
+        )
         self._import_session("run-b", [self._record(1, -27.330005, -55.86)])
+        cluster_id = Pothole.objects.get(is_consolidated=True).pk
 
         self.assertEqual(CaptureSession.objects.count(), 2)
         self.assertEqual(PotholeObservation.objects.count(), 2)
         self.assertEqual(Pothole.objects.filter(is_consolidated=True).count(), 1)
         self.assertEqual(PotholeObservation.objects.filter(cluster__isnull=False).count(), 2)
-        cluster_id = Pothole.objects.get(is_consolidated=True).pk
+        self.assertTrue(PotholeFeedback.objects.filter(
+            pothole_id=cluster_id, client_token=feedback_token
+        ).exists())
 
         call_command("import_processed_potholes", str(run_a), verbosity=0)
 
         self.assertEqual(PotholeObservation.objects.count(), 2)
         self.assertEqual(Pothole.objects.filter(is_consolidated=True).count(), 1)
         self.assertEqual(Pothole.objects.get(is_consolidated=True).pk, cluster_id)
+        self.assertTrue(PotholeFeedback.objects.filter(
+            pothole_id=cluster_id, client_token=feedback_token
+        ).exists())
+
+    def test_import_persists_evidence_in_media_and_sets_cluster_image(self):
+        record = self._record(1, -27.33, -55.86)
+        record["severity"] = "moderado"
+        record["area_norm"] = 0.02
+        record["evidence_image"] = "crops/bache_0001.jpg"
+        session_dir = self._create_session_dir("evidence-run", [record])
+        crop = session_dir / "crops" / "bache_0001.jpg"
+        crop.parent.mkdir()
+        crop.write_bytes(b"synthetic-image-fixture")
+
+        call_command("import_processed_potholes", str(session_dir), verbosity=0)
+
+        observation = PotholeObservation.objects.get(track_id=1)
+        pothole = Pothole.objects.get(is_consolidated=True)
+        self.assertTrue(observation.evidence_image)
+        self.assertTrue(observation.evidence_image.storage.exists(observation.evidence_image.name))
+        self.assertEqual(pothole.imagen.name, observation.evidence_image.name)
+        self.assertTrue(pothole.imagen.storage.exists(pothole.imagen.name))
+
+    def test_feedback_survives_cluster_split_without_duplication(self):
+        run_a = self._create_session_dir("split-a", [self._record(1, -27.33, -55.86)])
+        run_b = self._create_session_dir("split-b", [self._record(1, -27.330005, -55.86)])
+        call_command("import_processed_potholes", str(run_a), verbosity=0)
+        call_command("import_processed_potholes", str(run_b), verbosity=0)
+        old_cluster = Pothole.objects.get(is_consolidated=True)
+        tokens = [uuid.uuid4() for _ in range(3)]
+        PotholeFeedback.objects.bulk_create([
+            PotholeFeedback(
+                pothole=old_cluster,
+                feedback_type=PotholeFeedback.FALSE_POSITIVE,
+                client_token=token,
+            )
+            for token in tokens
+        ])
+
+        record = self._record(1, -27.34, -55.86)
+        (run_b / "processed_potholes.json").write_text(json.dumps([record]), encoding="utf-8")
+        call_command("import_processed_potholes", str(run_b), verbosity=0)
+
+        clusters = list(Pothole.objects.filter(is_consolidated=True).order_by("pk"))
+        self.assertEqual(len(clusters), 2)
+        self.assertEqual(PotholeFeedback.objects.count(), 3)
+        feedback_target_ids = set(PotholeFeedback.objects.values_list("pothole_id", flat=True))
+        self.assertEqual(len(feedback_target_ids), 1)
+        target = next(cluster for cluster in clusters if cluster.pk in feedback_target_ids)
+        other = next(cluster for cluster in clusters if cluster.pk not in feedback_target_ids)
+        target.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(target.false_positive_reports, 3)
+        self.assertFalse(target.is_visible)
+        self.assertTrue(other.is_visible)
 
     def test_distant_and_unlocated_observations_remain_separate_or_unclustered(self):
         self._import_session("near", [self._record(1, -27.33, -55.86)])
@@ -146,6 +241,38 @@ class SpatialDatabaseTests(TestCase):
         self.assertIn("latitud", response.data[0])
         self.assertIn("longitud", response.data[0])
         self.assertIn("gravedad", response.data[0])
+
+    def test_feedback_is_idempotent_and_hides_after_three_false_positive_reports(self):
+        pothole = Pothole.objects.create(
+            gravedad="moderado", latitud=-27.33, longitud=-55.86, confianza=0.8
+        )
+        url = reverse("bache-feedback", args=[pothole.pk])
+        client = APIClient()
+        tokens = [str(uuid.uuid4()) for _ in range(3)]
+
+        first = client.post(url, {
+            "feedback_type": PotholeFeedback.FALSE_POSITIVE,
+            "client_token": tokens[0],
+        }, format="json")
+        duplicate = client.post(url, {
+            "feedback_type": PotholeFeedback.FALSE_POSITIVE,
+            "client_token": tokens[0],
+        }, format="json")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertEqual(duplicate.data["false_positive_reports"], 1)
+
+        for token in tokens[1:]:
+            response = client.post(url, {
+                "feedback_type": PotholeFeedback.FALSE_POSITIVE,
+                "client_token": token,
+            }, format="json")
+            self.assertEqual(response.status_code, 201)
+
+        pothole.refresh_from_db()
+        self.assertEqual(pothole.false_positive_reports, 3)
+        self.assertFalse(pothole.is_visible)
+        self.assertEqual(client.get(reverse("bache-list")).data, [])
 
     def test_rebuild_keeps_manually_created_potholes(self):
         manual = Pothole.objects.create(

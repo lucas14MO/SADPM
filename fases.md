@@ -10,7 +10,7 @@
 | **Frontend** | React, Leaflet.js, React-Leaflet, Vanilla CSS / TailwindCSS |
 | **Backend API** | Django, Django REST Framework (DRF), Python |
 | **Base de Datos** | PostgreSQL + PostGIS (Soporte geoespacial nativo) |
-| **IA & Visión por Computadora** | Python, Ultralytics YOLO (v8/v11), OpenCV, PyTorch, ByteTrack / BoT-SORT |
+| **IA & Visión por Computadora** | Python, Ultralytics YOLO26 (V4 monoclass), OpenCV, PyTorch, ByteTrack / BoT-SORT |
 | **Geoprocesamiento & Datos** | Roboflow / CVAT, GPX Logger, DBSCAN (Scikit-Learn) |
 
 ---
@@ -41,27 +41,31 @@
 
 ## Fase 3 — Entrenamiento y Evaluación del Modelo IA
 - **Objetivo**: Obtener un detector de baches de alta precisión basado en YOLO.
-- **Entregables & Tecnologías** (`Ultralytics YOLOv8/v11`, `PyTorch`):
+- **Entregables & Tecnologías** (`Ultralytics YOLO26`, `PyTorch`):
   - Entrenamiento supervisado del modelo YOLO.
   - Evaluación cuantitativa con métricas `mAP@50`, `mAP@50-95`, `Precision`, `Recall`.
   - Ajuste fine-tuning e hiperparámetros.
   - Matriz de confusión y análisis de falsos positivos/negativos.
 
 ## Fase 4 — Clasificación de Gravedad y Lógica de Negocio
-- **Objetivo**: Determinar el nivel de severidad de cada bache detectado.
+- **Estado**: ROI, fórmula configurable, umbrales y clasificación canónica implementados en el pipeline offline con defaults provisionales; calibración con datos etiquetados pendiente.
+- **Objetivo**: Filtrar detecciones fuera de la calzada y asignar severidad de forma determinista con el área aparente del bache, sin depender de clases de severidad predichas por YOLO.
 - **Entregables**:
-  - Implementación de modelo multi-clase en YOLO (`leve`, `moderado`, `critico`) o algoritmo de área relativa (ratio área bache vs área del frame/calzada).
-  - Clasificación tripartita visual: Verde (Leve), Amarillo (Moderado), Rojo (Crítico).
-  - Documentación técnica justificativa sobre el procesamiento con cámara monocular (sin sensores 3D/LiDAR).
+  - Aplicar una región de interés (ROI) del asfalto. Como regla inicial, ignorar detecciones cuyo centroide vertical cumpla `Y_center < 0.45 × H`; validar y permitir ajustar el límite para el montaje real.
+  - Calcular `A_norm = A / (W × H) × f(Y_center)`; el procesador usa una corrección de perspectiva configurable, con calibración por montaje pendiente.
+  - Elegir como keyframe la mayor área de caja observada dentro de ROI y desempatar por confianza.
+  - Clasificar el keyframe con umbrales configurables: `leve` por debajo de `Umbral_Leve`, `moderado` entre ambos umbrales y `critico` desde `Umbral_Crítico`. Calibrar los valores antes de usarlos como métricas de campo.
+  - Mantener la presentación Verde (Leve), Amarillo (Moderado) y Rojo (Crítico), y documentar las limitaciones de estimar tamaño/severidad con cámara monocular.
 
 ## Fase 5 — Pipeline de Video, Tracking Temporal y Georreferenciación
 - **Objetivo**: Procesar videos completos, rastrear baches cuadro a cuadro y asociar coordenadas GPS.
 - **Entregables & Tecnologías** (`OpenCV`, `ByteTrack / BoT-SORT`, `gpxpy`):
   - Inferencia batch sobre video completo.
   - Tracking multi-objeto con ByteTrack para resumir detecciones por ID dentro de una sesión.
-  - Interpolación lineal del track GPX para asignar latitud/longitud al keyframe de mayor confianza, usando timestamps UTC de `frames.csv`.
-  - Exportación local de baches únicos y evidencia a `processed_potholes.json` y `crops/` mediante `capture/process_video.py`.
-- **Estado**: georreferenciación offline implementada. Importación a Django y deduplicación al importar están implementadas en Fase 6/7; falta validar una demo integral con datos reales. La calibración geométrica requiere valores medidos para cada montaje.
+  - Aplicar el filtro ROI y la clasificación determinista por área normalizada al keyframe representativo de cada track; conservar la confianza YOLO como una métrica independiente.
+  - Interpolación lineal del track GPX para asignar latitud/longitud al keyframe de mayor área dentro de ROI (desempate por confianza), usando timestamps UTC de `frames.csv`.
+  - Exportar severidad canónica determinista, confianza, `area_norm` y ruta del recorte anotado a `processed_potholes.json` y `crops/bache_NNNN.jpg`.
+- **Estado**: pipeline V4 monoclass, ROI, severidad configurable y exportación implementados; suite local de captura pasa. Defaults de perspectiva/umbrales son provisionales y falta validar con video/GPX/imágenes completos. La calibración geométrica requiere valores medidos para cada montaje.
 
 ## Fase 6 — Deduplicación Espacial
 - **Objetivo**: Evitar registros duplicados de un mismo bache entre diferentes pasadas por la misma ruta.
@@ -72,11 +76,14 @@
 - **Criterio inicial**: `eps=2.5 m`, configurable; preservar observaciones originales y excluir del clustering las que no tienen coordenadas.
 
 ## Fase 7 — Backend REST API & Base de Datos Espacial (Django + PostgreSQL)
+- **Estado**: modelos, migración, importación de evidencia y endpoint implementados; migración aplicada y suite backend validada con PostgreSQL/PostGIS.
 - **Objetivo**: Desarrollar la infraestructura servidora para almacenamiento y consulta espacial de baches.
 - **Entregables & Tecnologías** (`Django`, `Django REST Framework`, `PostgreSQL + PostGIS`):
-  - Modelos de datos para Baches (geometría Point, gravedad, foto_url, confianza, timestamp).
+  - Persistir por bache la geometría, severidad determinista (`leve`, `moderado`, `critico`), URL/archivo de evidencia, confianza YOLO, `area_norm`, timestamp y contadores de feedback ciudadano.
   - Endpoints REST para consulta geoespacial: baches por radio/bounding box.
   - Comando de importación de sesiones procesadas a la base espacial (`backend/potholes/management/commands/import_processed_potholes.py`). No es una carga HTTP a la API; la integración con el mapa/API debe configurarse y verificarse.
+  - Endpoint para registrar votos de falso positivo y de bache reparado/desactualizado. Aplicar ocultamiento cuando haya al menos 3 reportes de falso positivo o un reporte de desactualización; limitar duplicados por UUID de cliente.
+  - Excluir los baches invalidados/desactualizados de las consultas públicas del mapa y conservar su estado/contadores para auditoría.
 
 ## Fase 8 — Frontend Mapa Interactivo (React + Leaflet.js)
 - **Objetivo**: Construir la interfaz de usuario interactiva para visualización del estado de las calles.
@@ -84,7 +91,10 @@
   - Mapa interactivo de Encarnación con capa de azulejos (tiles OpenStreetMap / CartoDB).
   - Renderizado de marcadores codificados por color (Verde/Amarillo/Rojo) y tamaño según gravedad.
   - Filtro interactivo por radio de búsqueda centrado en la ubicación del usuario o en un punto seleccionado.
-  - Popups con imagen del bache, nivel de confianza, coordenadas y fecha.
+  - Popup con imagen del keyframe y caja de detección dibujada, gravedad, confianza, coordenadas y fecha.
+  - Acciones para reportar falso positivo o bache reparado/desactualizado; mostrar estado de envío y contadores, limitando votos repetidos según la política backend.
+  - Reflejar que los baches invalidados o desactualizados dejan de aparecer en el mapa.
+- **Estado**: payload API, endpoint y acciones de UI implementados en código; falta aplicar/verificar migración PostGIS y compilar/probar frontend en entorno con Node.
 
 ## Fase 9 — Integración End-to-End, Pruebas y Presentación
 - **Objetivo**: Conectar todo el pipeline desde la entrada de video hasta la renderización en el mapa.

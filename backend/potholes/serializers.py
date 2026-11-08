@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Pothole
+from .models import Pothole, PotholeFeedback
 
 
 class PotholeSerializer(serializers.ModelSerializer):
@@ -16,14 +16,21 @@ class PotholeSerializer(serializers.ModelSerializer):
             'longitud',
             'coordenadas',
             'confianza',
+            'area_norm',
             'timestamp_deteccion',
             'imagen',
             'url_imagen_externa',
             'url_imagen',
+            'false_positive_reports',
+            'repaired_reports',
+            'is_visible',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = [
+            'id', 'area_norm', 'false_positive_reports', 'repaired_reports',
+            'is_visible', 'created_at', 'updated_at',
+        ]
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
@@ -36,3 +43,10 @@ class PotholeSerializer(serializers.ModelSerializer):
         else:
             ret['url_imagen'] = None
         return ret
+
+
+class PotholeFeedbackSerializer(serializers.Serializer):
+    feedback_type = serializers.ChoiceField(
+        choices=[item[0] for item in PotholeFeedback.FEEDBACK_TYPES]
+    )
+    client_token = serializers.UUIDField()

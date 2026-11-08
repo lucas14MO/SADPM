@@ -1,9 +1,10 @@
 # Backend y base espacial SPM
 
-El backend usa Django y PostgreSQL/PostGIS en contenedores Compose. Ambos servicios
-se comunican por una red Docker privada; solo la API se publica en loopback.
+En desarrollo, PostGIS corre en Docker Compose y Django corre directamente en el
+host usando el entorno Python del repositorio. Esto permite depurar Django desde
+VS Code; PostgreSQL solo se publica en loopback (`127.0.0.1`).
 
-## Iniciar API y PostGIS
+## Iniciar PostGIS y Django local
 
 ```bash
 cd backend
@@ -11,28 +12,51 @@ cp .env.example .env
 # Cambia POSTGRES_PASSWORD en .env para tu entorno local.
 ```
 
-PostGIS no publica un puerto en el host: solo Django puede acceder a
-`postgis:5432` por la red interna. La API queda disponible en
-`http://127.0.0.1:8000`. Los datos de PostgreSQL y archivos media persisten en
-volúmenes Docker. La imagen Django instala GEOS, GDAL y PROJ para GeoDjango.
-
-El flujo recomendado de primera instalación es:
+En Void Linux, instala las bibliotecas nativas que GeoDjango carga (`libgdal`,
+GEOS y PROJ). Los paquetes `-devel` también se incluyen por si alguna dependencia
+Python necesita compilar extensiones:
 
 ```bash
-sudo docker compose build django
-sudo docker compose up -d postgis
-sudo docker compose run --rm django python manage.py migrate --noinput
-sudo docker compose up -d
-sudo docker compose ps
-sudo docker compose run --rm --no-deps django python manage.py check
-sudo docker compose run --rm --no-deps django python manage.py test potholes
+sudo xbps-install -S libgdal libgdal-devel geos geos-devel proj proj-devel
 ```
 
-Al pasar de la configuración anterior, Compose puede recrear el contenedor
-PostGIS para quitar la publicación del puerto. El volumen `postgis_data` no se
-borra y conserva la base; no ejecutes `docker compose down -v`.
+El entorno Python del repositorio está en `../.venv`. Actívalo desde `backend/`
+para que el intérprete use su ruta canónica:
 
-Verifica la API en `http://127.0.0.1:8000/api/baches/`.
+```bash
+source ../.venv/bin/activate
+python -m pip install -r requirements.txt
+sudo docker compose up -d postgis
+sudo docker compose ps
+python manage.py check
+python manage.py migrate
+python manage.py runserver 127.0.0.1:8000
+```
+
+El comando `runserver` ocupa la terminal. Déjalo abierto mientras uses la API;
+deténlo con `Ctrl+C`. `backend/.env` debe tener `POSTGRES_HOST=127.0.0.1` y
+`POSTGRES_PORT=5432`, además de las mismas credenciales que usa el servicio
+`postgis` de Compose. La plantilla `.env.example` contiene estos campos. Si
+`DJANGO_PORT` en `.env` no es `8000`, reemplaza el puerto del último comando por
+ese valor.
+
+Para levantar también el frontend en Docker:
+
+```bash
+sudo docker compose up -d --build --remove-orphans postgis frontend
+```
+
+Vite queda en `http://127.0.0.1:5173` y consulta Django en
+`http://127.0.0.1:${DJANGO_PORT:-8000}/api`. El servicio `django` ya no forma
+parte de Compose. El volumen `postgis_data` conserva la base; no ejecutes
+`docker compose down -v`.
+
+Django ejecutado en el host guarda nuevas imágenes en `backend/media/`. Si la
+instalación anterior ya guardó imágenes en el volumen Docker `media_data`, esas
+imágenes no aparecen automáticamente en la carpeta local; cópialas antes de
+depender de los registros existentes que las referencian.
+
+Verifica la API en `http://127.0.0.1:${DJANGO_PORT:-8000}/api/baches/`.
 
 Las migraciones habilitan PostGIS, crean las tablas de sesiones/observaciones,
 conservan las coordenadas del modelo existente y agregan índices espaciales.
@@ -63,8 +87,11 @@ entre recorridos mediante `ST_ClusterDBSCAN`. Las distancias se calculan en UTM
 21S (EPSG:32721), adecuado a la zona de Encarnación. El radio inicial de
 agrupación es 2.5 m y cada observación georreferenciada crea un grupo aunque esté
 aislada. Las observaciones con coordenadas nulas se guardan, pero no se agrupan.
-Cada observación conserva clase, confianza promedio/máxima, cantidad de frames,
-timestamp, keyframe y ruta local de evidencia.
+Cada observación conserva severidad canónica, confianza promedio/máxima,
+`area_norm`, cantidad de frames, timestamp, keyframe y ruta local de evidencia.
+Durante la importación, los recortes se copian al almacenamiento persistente
+`MEDIA`; la ruta montada de la sesión no se usa como URL pública. El agregador
+asocia al bache consolidado la evidencia del registro representativo.
 Para identificar la sesión usa `session.json.start_utc` o el primer timestamp de
 `frames.csv`; así la clave no depende de la ruta absoluta de la carpeta. Si se
 mueve una sesión, conserva su nombre y sus timestamps para que se reconozca como
@@ -78,6 +105,13 @@ La API conserva el contrato de baches existente. Las consultas de radio utilizan
 `ST_DWithin` sobre geography y reciben el radio en metros. Las observaciones y
 consolidados se administran por Django; no se añade un endpoint de ingesta en
 esta fase.
+
+El endpoint `POST /api/baches/{id}/feedback/` recibe `feedback_type`
+(`false_positive` o `repaired`) y un UUID anónimo del cliente. El mismo token no
+puede votar más de una vez por tipo y bache. Tres reportes de falso positivo o
+uno de reparación ocultan el bache de consultas públicas. Los reportes se
+reasocian a los clusters reconstruidos según el mayor solapamiento de sus
+observaciones.
 
 ## Respaldo
 

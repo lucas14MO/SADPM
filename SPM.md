@@ -27,12 +27,14 @@ Implementar el marcado y visualización de puntos que representen baches.
 - El usuario debe poder seleccionar un punto en el mapa para mostrar los baches en un radio configurable alrededor del mismo.
 - Los puntos deben pintarse con colores y tamaños representativos del nivel de gravedad del bache (verde: leve, amarillo: moderado, rojo: crítico).
 - La posición de cada punto debe correlacionarse exactamente con coordenadas geográficas (latitud, longitud).
-- Mostrar popup/modal interactivo al hacer clic en un bache con su foto recortada, fecha de detección, nivel de confianza y gravedad.
+- Mostrar popup/modal con el recorte del keyframe y la caja dibujada, fecha, confianza y severidad calculada.
+- Permitir reportar un falso positivo o indicar que el bache fue reparado/desactualizado; ocultar en el mapa los baches invalidados por el backend.
 
 ### T03AM - Backend
 Crear una API REST en Django + PostgreSQL (PostGIS) para almacenar y consultar los datos de los baches.
 - La app frontend debe poder consumir la API para consultar baches por radio espacial (`/api/baches/?lat=...&lng=...&radio=...`).
-- Los baches deben almacenar: `id`, `gravedad` (leve/moderado/crítico), `radio_estimado`, `coordenadas` (lat, lng), `confianza`, `timestamp_deteccion` y `url_imagen`.
+- Los baches deben almacenar: `id`, severidad determinista (leve/moderado/crítico), `radio_estimado`, coordenadas, confianza YOLO, `timestamp_deteccion`, URL/archivo de evidencia, contadores de reportes y estado de validez/visibilidad.
+- Incorporar endpoint de feedback y purga lógica/ocultamiento: invalidar con al menos 3 reportes de falso positivo o al marcarse como reparado/desactualizado; definir una política para evitar votos duplicados.
 
 ## IA y Entrenamiento
 
@@ -59,9 +61,10 @@ Crear una API REST en Django + PostgreSQL (PostGIS) para almacenar y consultar l
 
 ### T05IE - Clasificación de Gravedad del Bache
 - Definir e implementar el criterio de clasificación de gravedad:
-  - Opción A: Detección multi-clase en YOLO (entrenar clases `bache_leve`, `bache_moderado`, `bache_critico`).
-  - Opción B: Clasificación por área relativa del bounding box respecto al área del frame/camino.
-- Documentar las limitaciones técnicas de la cámara monocular respecto a la profundidad.
+  - Filtrar detecciones fuera de la ROI del asfalto usando el centroide vertical; como valor inicial, descartar si `Y_center < 0.45 × H`.
+  - Calcular `A_norm = A / (W × H) × f(Y_center)` para corregir el área del bounding box por perspectiva.
+  - Determinar la severidad del keyframe representativo con umbrales configurables para `leve`, `moderado` y `critico`; calibrar la corrección y los umbrales por montaje.
+- Mantener la confianza YOLO separada de la severidad y documentar las limitaciones de estimar tamaño con cámara monocular.
 
 ## Procesado de Imagen
 
@@ -73,7 +76,7 @@ Crear una API REST en Django + PostgreSQL (PostGIS) para almacenar y consultar l
 - Aplicar redimensionamiento de imagen a la resolución nativa del modelo (640x640) conservando la proporción de aspecto.
 - Normalizar canales de color (RGB) y contraste si fuera necesario.
 - Implementar algoritmo de detección de desenfoque (ej. varianza del Laplaciano en OpenCV) para descartar fotogramas movidos por vibración del vehículo.
-- Recortar y guardar la región de interés (ROI) correspondiente a la caja delimitadora del bache detectado para la evidencia visual.
+- Aplicar la ROI del asfalto antes de consolidar detecciones y guardar como evidencia el recorte del keyframe representativo, con su caja visible.
 
 ## Grabado y Procesamiento de Video
 
@@ -97,5 +100,5 @@ Crear una API REST en Django + PostgreSQL (PostGIS) para almacenar y consultar l
 - Base acordada: PostgreSQL + PostGIS en contenedor Docker Compose; se conservan observaciones por sesión y se recalculan baches consolidados con `eps=2.5 m` configurable.
 
 ### T05GP - Carga Masiva y Sincronización con Backend Django
-- Crear script de exportación automática que envía los baches deduplicados a la API REST de Django.
-- Cargar las imágenes recortadas de los baches (keyframes) al servidor/storage y asociar las URLs a los registros en la base de datos PostgreSQL.
+- Importar las sesiones procesadas al backend Django/PostGIS mediante el comando batch vigente, conservando la evidencia y asociando su ruta/URL a cada bache.
+- Integrar el registro de feedback ciudadano y la exclusión de baches invalidados/desactualizados de las consultas públicas.

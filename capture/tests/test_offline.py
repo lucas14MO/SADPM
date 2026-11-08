@@ -12,6 +12,7 @@ from types import ModuleType
 from spm_capture.offline import (
     GPSPoint,
     Observation,
+    SeverityConfig,
     TrackSummary,
     interpolate_gps_position,
     load_frame_timestamps,
@@ -36,40 +37,76 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual(interpolate_gps_position(self.start - timedelta(seconds=1), points), (None, None))
         self.assertEqual(interpolate_gps_position(self.start + timedelta(seconds=11), points), (None, None))
 
-    def test_track_votes_by_majority_and_uses_highest_confidence_frame(self) -> None:
+    def test_track_uses_largest_roi_box_for_keyframe_and_severity(self) -> None:
         track = TrackSummary(7)
         crop = SimpleNamespace(size=1)
         track.observations = [
-            Observation(2, self.start, "pothole_light", 0.9, (0, 0, 2, 2), crop),
-            Observation(4, self.start + timedelta(seconds=2), "pothole_moderate", 0.7, (0, 0, 2, 2), crop),
-            Observation(5, self.start + timedelta(seconds=3), "pothole_moderate", 0.8, (0, 0, 2, 2), crop),
+            Observation(2, self.start, "pothole", 0.99, (10, 50, 30, 70), crop, (100, 100)),
+            Observation(4, self.start + timedelta(seconds=2), "pothole", 0.7,
+                        (10, 50, 40, 80), crop, (100, 100)),
+            Observation(5, self.start + timedelta(seconds=3), "pothole", 0.8,
+                        (10, 50, 40, 80), crop, (100, 100)),
         ]
+        config = SeverityConfig(
+            light_area_threshold=0.02,
+            critical_area_threshold=0.1,
+            perspective_reference_ratio=0.65,
+        )
         with tempfile.TemporaryDirectory() as directory:
             with patch("spm_capture.offline._save_crop", return_value=True):
-                record = track.to_record(3, Path(directory), [])
+                record = track.to_record(3, Path(directory), [], severity_config=config)
 
         self.assertIsNotNone(record)
         assert record is not None
-        self.assertEqual(record["severity"], "pothole_moderate")
-        self.assertEqual(record["frame_key"], 2)
-        self.assertEqual(record["confidence_max"], 0.9)
-        self.assertAlmostEqual(record["confidence_avg"], 0.8)
+        self.assertEqual(record["severity"], "moderado")
+        self.assertEqual(record["frame_key"], 5)
+        self.assertEqual(record["confidence_max"], 0.99)
+        self.assertEqual(record["confidence_keyframe"], 0.8)
+        self.assertAlmostEqual(record["confidence_avg"], 0.83)
+        self.assertAlmostEqual(record["area_norm"], 0.09)
         self.assertEqual(record["latitude"], None)
 
-    def test_track_tie_breaks_by_total_class_confidence(self) -> None:
-        track = TrackSummary(3)
+    def test_roi_discards_tracks_above_horizon_and_includes_threshold(self) -> None:
+        config = SeverityConfig(roi_horizon_ratio=0.45)
         crop = SimpleNamespace(size=1)
-        track.observations = [
-            Observation(0, self.start, "pothole_light", 0.5, (0, 0, 2, 2), crop),
-            Observation(1, self.start, "pothole_critical", 0.8, (0, 0, 2, 2), crop),
-        ]
+        above = Observation(0, self.start, "pothole", 0.9, (0, 20, 20, 40), crop, (100, 100))
+        at_threshold = Observation(1, self.start, "pothole", 0.8, (0, 35, 20, 55), crop,
+                                   (100, 100))
+        track = TrackSummary(3, [above])
         with tempfile.TemporaryDirectory() as directory:
             with patch("spm_capture.offline._save_crop", return_value=True):
-                record = track.to_record(1, Path(directory), [])
+                rejected = track.to_record(1, Path(directory), [], severity_config=config)
+                track.observations = [above, at_threshold]
+                record = track.to_record(1, Path(directory), [], severity_config=config)
 
+        self.assertIsNone(rejected)
         self.assertIsNotNone(record)
         assert record is not None
-        self.assertEqual(record["severity"], "pothole_critical")
+        self.assertEqual(record["frame_key"], 1)
+        self.assertEqual(record["frames_detected"], 1)
+
+    def test_severity_thresholds_are_deterministic(self) -> None:
+        config = SeverityConfig(light_area_threshold=0.01, critical_area_threshold=0.05)
+        self.assertEqual(config.severity_for(0.009), "leve")
+        self.assertEqual(config.severity_for(0.01), "moderado")
+        self.assertEqual(config.severity_for(0.05), "critico")
+
+    def test_perspective_factor_is_one_at_reference_and_increases_toward_horizon(self) -> None:
+        config = SeverityConfig()
+        self.assertAlmostEqual(config.area_factor(70, 100), 1.0)
+        self.assertGreater(config.area_factor(50, 100), 1.0)
+
+    def test_reads_recording_frame_index_csvs_when_present(self) -> None:
+        index_root = Path(__file__).parents[1] / "record_tests" / "recording_frames"
+        index_files = sorted(index_root.glob("*/frames_index.csv"))
+        if not index_files:
+            self.skipTest("No hay índices de frames locales en record_tests.")
+
+        for index_file in index_files:
+            with self.subTest(session=index_file.parent.name):
+                timestamps = load_frame_timestamps(index_file)
+                self.assertTrue(timestamps)
+                self.assertTrue(all(timestamp.tzinfo is not None for timestamp in timestamps.values()))
 
     def test_loads_utc_timestamps_indexed_by_frame(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -127,6 +164,7 @@ class OfflinePipelineTests(unittest.TestCase):
         fake_cv2 = ModuleType("cv2")
         fake_cv2.CAP_PROP_FPS = 5
         fake_cv2.VideoCapture = lambda _path: capture
+        fake_cv2.rectangle = lambda *_args, **_kwargs: None
 
         def write_crop(path: str, _crop: FakeFrame) -> bool:
             Path(path).write_bytes(b"crop")
@@ -135,7 +173,7 @@ class OfflinePipelineTests(unittest.TestCase):
         fake_cv2.imwrite = write_crop
 
         class FakeModel:
-            names = {0: "pothole_light", 1: "pothole_moderate", 2: "pothole_critical"}
+            names = {0: "pothole"}
 
             def __init__(self, _model_path: str) -> None:
                 self.calls = 0
@@ -143,11 +181,10 @@ class OfflinePipelineTests(unittest.TestCase):
             def track(self, _frame: FakeFrame, **kwargs: object) -> list[object]:
                 self.assert_tracking_options(kwargs)
                 self.calls += 1
-                class_id = self.calls - 1
                 boxes = SimpleNamespace(
                     id=FakeTensor([9]),
-                    cls=FakeTensor([class_id]),
-                    conf=FakeTensor([[0.6], [0.9]][class_id]),
+                    cls=FakeTensor([0]),
+                    conf=FakeTensor([0.6 if self.calls == 1 else 0.9]),
                     xyxy=FakeTensor([[1.0, 1.0, 5.0, 5.0]]),
                 )
                 return [SimpleNamespace(boxes=boxes)]
@@ -156,6 +193,7 @@ class OfflinePipelineTests(unittest.TestCase):
             def assert_tracking_options(options: dict[str, object]) -> None:
                 assert options["persist"] is True
                 assert options["tracker"] == "bytetrack.yaml"
+                assert options["classes"] == [0]
 
         fake_ultralytics = ModuleType("ultralytics")
         fake_ultralytics.YOLO = FakeModel
@@ -181,14 +219,18 @@ class OfflinePipelineTests(unittest.TestCase):
             )
             with patch.dict("sys.modules", {"cv2": fake_cv2, "ultralytics": fake_ultralytics,
                                             "gpxpy": fake_gpxpy}):
-                output_path = process_session(session_dir, session_dir / "best.pt", min_frames=2)
+                output_path = process_session(
+                    session_dir, session_dir / "best.pt", min_frames=2,
+                    severity_config=SeverityConfig(roi_horizon_ratio=0.0),
+                )
 
             import json
 
             records = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertTrue(capture.released)
             self.assertEqual(len(records), 1)
-            self.assertEqual(records[0]["severity"], "pothole_moderate")
+            self.assertEqual(records[0]["severity"], "critico")
+            self.assertIn("area_norm", records[0])
             self.assertEqual(records[0]["frame_key"], 1)
             self.assertEqual(records[0]["latitude"], -26.8)
             self.assertEqual(records[0]["longitude"], -54.8)
@@ -203,13 +245,15 @@ class OfflinePipelineTests(unittest.TestCase):
             capture.frame_index = 0
             with patch.dict("sys.modules", {"cv2": fake_cv2, "ultralytics": fake_ultralytics,
                                             "gpxpy": fake_gpxpy}):
-                process_session(session_dir, session_dir / "best.pt", min_frames=2)
+                process_session(
+                    session_dir, session_dir / "best.pt", min_frames=2,
+                    severity_config=SeverityConfig(roi_horizon_ratio=0.0),
+                )
             projected = json.loads(output_path.read_text(encoding="utf-8"))[0]
             self.assertEqual(projected["location_method"], "camera_projection")
             self.assertEqual(projected["vehicle_latitude"], -26.8)
-            # Se promedian las dos observaciones (vehículo en -27/-55 y -26.8/-54.8); como
-            # avanza hacia el noreste, el bache queda delante del punto medio de la antena.
-            self.assertEqual(projected["projected_samples"], 2)
+            # La geolocalización calibrada corresponde al mismo keyframe que el registro.
+            self.assertEqual(projected["projected_samples"], 1)
             self.assertGreater(projected["latitude"], -26.9)
             self.assertGreater(projected["longitude"], -54.9)
 
@@ -217,7 +261,8 @@ class OfflinePipelineTests(unittest.TestCase):
                                             "gpxpy": fake_gpxpy}):
                 capture.frame_index = 0
                 process_session(session_dir, session_dir / "best.pt", min_frames=2,
-                                use_calibration=False)
+                                use_calibration=False,
+                                severity_config=SeverityConfig(roi_horizon_ratio=0.0))
             raw = json.loads(output_path.read_text(encoding="utf-8"))[0]
             self.assertEqual(raw["location_method"], "gps_vehicle")
 

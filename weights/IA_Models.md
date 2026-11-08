@@ -1,9 +1,33 @@
 # Modelos de detección de baches
 
-## Procedencia del modelo actual
+## V4 monoclass (modelo objetivo del procesamiento offline)
+
+El artefacto `weights/weights_v4_monoclass.pt` fue reportado como entrenado
+con YOLO26 Small y una única clase de detección, `pothole`. La composición del
+dataset informada para esta versión es:
+
+| Campo | Valor reportado |
+| --- | --- |
+| Arquitectura/tamaño | YOLO26 Small |
+| Clases | 1: `pothole` |
+| Imágenes | 386 |
+| Imágenes propias | 143 |
+| Imágenes seleccionadas del dataset público | 243 |
+| Split train/valid/test | No informado |
+| Métricas de evaluación | No informadas |
+| Licencia del checkpoint/dataset | No verificada |
+
+Estos datos describen el entrenamiento comunicado para V4; no sustituyen el
+reporte reproducible ni verifican por sí mismos los metadatos internos del
+checkpoint, la procedencia exacta de las 243 imágenes públicas o los derechos
+de uso. V4 se usa como detector monoclass en el procesamiento offline; la
+severidad se calcula después por ROI y área relativa, no la predice YOLO.
+
+## V3 multiclase (histórico / compatibilidad)
 
 El archivo `weights/weights.pt` (5,2 MB; presente localmente el 7/11/2026) es el
-checkpoint configurado como modelo multiclase para el procesamiento offline.
+checkpoint multiclase anterior, conservado para reproducibilidad y compatibilidad
+con sesiones ya procesadas.
 Los datos de Roboflow proporcionados para V3 son:
 
 | Campo | Valor |
@@ -41,7 +65,7 @@ test para reproducirlas. No se deben presentar como evaluación independiente.
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | V2 (10/10/2026) | No documentado; una clase | 82,7% | No registrado | 86,4% | 75,5% | 80,6% | No registrada |
 | V3 (Roboflow, 26/10/2026; iteración 4) | Dataset versión 2026-10-26 2:46 PM; 338 imágenes seleccionadas + aumentos; 70/20/10; 3 clases | 39,2% | 16,9% | 63,1% | 46,2% | 52,6% | [Matriz etiquetada](Source/matris_confusion_labeled.svg) |
-| V4 | Entrenamiento/evaluación pendiente | — | — | — | — | — | — |
+| V4 monoclass | YOLO26 Small; 386 imágenes reportadas (143 propias + 243 públicas seleccionadas); split/métricas pendientes | — | — | — | — | — | — |
 
 La matriz de confusión V3 está disponible como imagen original en
 [`Source/matris_confusion.png`](Source/matris_confusion.png) y con leyendas

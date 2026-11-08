@@ -32,10 +32,12 @@ class PotholeObservation(models.Model):
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
     confidence_avg = models.FloatField()
     confidence_max = models.FloatField()
+    area_norm = models.FloatField(null=True, blank=True)
     frames_detected = models.PositiveIntegerField(default=1)
     timestamp = models.DateTimeField()
     frame_key = models.PositiveIntegerField()
     location = models.PointField(srid=4326, null=True, blank=True, spatial_index=True)
+    evidence_image = models.ImageField(upload_to="pothole_observations/", null=True, blank=True)
     evidence_path = models.CharField(max_length=1024, blank=True)
     cluster = models.ForeignKey(
         "Pothole", on_delete=models.SET_NULL, null=True, blank=True,
@@ -58,6 +60,10 @@ class PotholeObservation(models.Model):
             models.CheckConstraint(
                 condition=models.Q(confidence_avg__lte=F("confidence_max")),
                 name="observation_avg_lte_max_confidence",
+            ),
+            models.CheckConstraint(
+                condition=Q(area_norm__isnull=True) | Q(area_norm__gte=0),
+                name="observation_area_norm_nonnegative",
             ),
             models.CheckConstraint(
                 condition=(
@@ -107,6 +113,7 @@ class Pothole(models.Model):
         help_text="Nivel de confianza de la detección IA (0.0 a 1.0)",
         default=1.0
     )
+    area_norm = models.FloatField(null=True, blank=True)
     timestamp_deteccion = models.DateTimeField(
         default=timezone.now,
         help_text="Fecha y hora de detección"
@@ -124,6 +131,9 @@ class Pothole(models.Model):
         help_text="URL externa opcional de la evidencia visual"
     )
     evidence_path = models.CharField(max_length=1024, blank=True)
+    false_positive_reports = models.PositiveIntegerField(default=0)
+    repaired_reports = models.PositiveIntegerField(default=0)
+    is_visible = models.BooleanField(default=True, db_index=True)
     is_consolidated = models.BooleanField(default=False, db_index=True)
     consolidation_key = models.CharField(max_length=64, null=True, blank=True, unique=True)
 
@@ -160,6 +170,10 @@ class Pothole(models.Model):
                 condition=models.Q(confianza__gte=0, confianza__lte=1),
                 name="pothole_confidence_0_1",
             ),
+            models.CheckConstraint(
+                condition=models.Q(area_norm__isnull=True) | models.Q(area_norm__gte=0),
+                name="pothole_area_norm_nonnegative",
+            ),
         ]
 
     def __str__(self):
@@ -179,3 +193,26 @@ class Pothole(models.Model):
         if self.url_imagen_externa:
             return self.url_imagen_externa
         return None
+
+
+class PotholeFeedback(models.Model):
+    FALSE_POSITIVE = "false_positive"
+    REPAIRED = "repaired"
+    FEEDBACK_TYPES = [
+        (FALSE_POSITIVE, "Falso positivo"),
+        (REPAIRED, "Reparado o desactualizado"),
+    ]
+
+    pothole = models.ForeignKey(Pothole, on_delete=models.CASCADE, related_name="feedback")
+    feedback_type = models.CharField(max_length=20, choices=FEEDBACK_TYPES)
+    client_token = models.UUIDField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pothole", "feedback_type", "client_token"],
+                name="unique_pothole_feedback_token",
+            ),
+        ]
+        ordering = ["created_at", "id"]

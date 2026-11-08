@@ -5,8 +5,9 @@ import SeverityFilter from './components/filters/SeverityFilter';
 import PotholeDetailPanel from './components/details/PotholeDetailPanel';
 import ErrorBanner from './components/common/ErrorBanner';
 import { usePotholes } from './hooks/usePotholes';
+import { potholeService } from './services';
 import { SEVERITY_ORDER } from './utils/severity';
-import type { Pothole, Severity } from './types/pothole';
+import type { FeedbackType, Pothole, Severity } from './types/pothole';
 
 function App() {
   const [activeSeverities, setActiveSeverities] = useState<Severity[]>([...SEVERITY_ORDER]);
@@ -17,6 +18,19 @@ function App() {
     setActiveSeverities((prev) =>
       prev.includes(severity) ? prev.filter((current) => current !== severity) : [...prev, severity],
     );
+  };
+
+  const submitFeedback = async (type: FeedbackType) => {
+    if (!selectedPothole) return;
+    const result = await potholeService.submitFeedback(selectedPothole.id, type);
+    setSelectedPothole((current) => current && ({
+      ...current,
+      falsePositiveReports: result.false_positive_reports,
+      repairedReports: result.repaired_reports,
+      isVisible: result.is_visible,
+    }));
+    reload();
+    if (!result.is_visible) setSelectedPothole(null);
   };
 
   return (
@@ -35,7 +49,11 @@ function App() {
         {error && <ErrorBanner message={error} onRetry={reload} />}
 
         {selectedPothole && (
-          <PotholeDetailPanel pothole={selectedPothole} onClose={() => setSelectedPothole(null)} />
+          <PotholeDetailPanel
+            pothole={selectedPothole}
+            onClose={() => setSelectedPothole(null)}
+            onFeedback={submitFeedback}
+          />
         )}
       </div>
     </div>
