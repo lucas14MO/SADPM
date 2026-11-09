@@ -7,9 +7,9 @@
 ## 4. Detector determinista por ROI y área relativa — Media
 
 - [x] Aplicar ROI configurable al pipeline offline (`Y_center < 0.45 × H` por defecto) y probar detecciones por encima/en el límite.
-- [x] Calcular `A_norm = A / (W × H) × f(Y_center)` con factor de perspectiva y parámetros configurables; defaults provisionales documentados.
+- [x] Calcular `A_norm = A / (W × H) × f(Y_center)` con factor de perspectiva y parámetros configurables; defaults documentados.
 - [x] Seleccionar por track el keyframe de mayor área dentro de ROI, desempatar por confianza y usarlo para severidad, evidencia, timestamp y geolocalización.
-- [x] Asignar severidad canónica con umbrales configurables y cubrir los límites en pruebas sintéticas. **Pendiente:** calibrar `f` y umbrales con datos etiquetados de campo.
+- [x] Asignar severidad canónica con umbrales configurables y cubrir los límites en pruebas sintéticas. Umbrales calibrados por el equipo (`0.001` / `0.008`, 9/11) con la pestaña Calibración y `recalcular_severidad`. **Pendiente:** calibrar el factor de perspectiva `f`.
 - [x] Separar confianza YOLO de severidad en `processed_potholes.json`; el importador acepta severidad canónica y conserva compatibilidad con etiquetas V3.
 
 ## 5. Evidencia y recortes — Media

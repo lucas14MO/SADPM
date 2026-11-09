@@ -25,13 +25,6 @@ export interface PotholeFeedbackResult {
   is_visible: boolean;
 }
 
-/** Zona de búsqueda elegida en el mapa: centro y radio en metros. */
-export interface SearchArea {
-  lat: number;
-  lng: number;
-  radiusMeters: number;
-}
-
 /** Mirrors the query shape the future Django/PostGIS API is expected to expose (Fase 7). */
 export interface PotholeQueryParams {
   lat?: number;

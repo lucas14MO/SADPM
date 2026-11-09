@@ -26,9 +26,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--roi-horizon", type=float, default=0.45,
                         help="Excluir centros por encima de esta fracción de H (provisional: 0.45).")
     parser.add_argument("--area-light", type=float, default=0.001,
-                        help="Umbral A_norm leve/moderado (provisional: 0.001).")
-    parser.add_argument("--area-critical", type=float, default=0.005,
-                        help="Umbral A_norm moderado/crítico (provisional: 0.005).")
+                        help="Umbral A_norm leve/moderado (calibración actual: 0.001).")
+    parser.add_argument("--area-critical", type=float, default=0.008,
+                        help="Umbral A_norm moderado/crítico (calibración actual: 0.008).")
     parser.add_argument("--perspective-reference-y", type=float, default=0.7,
                         help="Fila normalizada de referencia para perspectiva (provisional: 0.7).")
     parser.add_argument("--perspective-exponent", type=float, default=2.0,

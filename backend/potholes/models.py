@@ -30,6 +30,14 @@ class PotholeObservation(models.Model):
     )
     track_id = models.PositiveIntegerField()
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES)
+    human_severity = models.CharField(
+        max_length=20, choices=SEVERITY_CHOICES, null=True, blank=True
+    )
+    classified_by = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="classified_pothole_observations",
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
     confidence_avg = models.FloatField()
     confidence_max = models.FloatField()
     area_norm = models.FloatField(null=True, blank=True)

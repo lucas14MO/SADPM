@@ -130,8 +130,11 @@ A_{n} = \frac{A}{W H}\left(\frac{y_{r}-y_{h}}{\max(y-y_{h},\,d)}\right)^{\gamma}
 \end{equation}
 donde $A$ es el área de la caja, $W\times H$ el tamaño del fotograma, $y$ la
 fila normalizada del centro, $y_h=0{,}45$ el horizonte de la ROI, $y_r=0{,}7$
-la fila de referencia, $d=0{,}05$ y $\gamma=2$. Con umbrales provisionales,
-$A_n<0{,}001$ es leve, $A_n<0{,}005$ moderado y el resto crítico.
+la fila de referencia, $d=0{,}05$ y $\gamma=2$. Con la calibración actual del
+equipo, $A_n<0{,}001$ es leve, $A_n<0{,}008$ moderado y el resto crítico. Para
+calibrar, el personal etiqueta recortes en una vista interna del frontend y un
+comando recalcula la severidad de las observaciones guardadas sin reprocesar
+el video.
 
 La posición del vehículo se interpola linealmente en el GPX y el rumbo se
 estima con posiciones vecinas en el tiempo. El centro de la caja se proyecta
@@ -268,9 +271,9 @@ El 98\,\% de las detecciones quedó dentro de la ROI y todas obtuvieron una
 posición proyectada. DBSCAN redujo 115 observaciones a 89 baches, lo que
 confirma que el mismo bache se detecta en fotogramas sucesivos. La inspección
 visual mostró falsos positivos, sobre todo grietas y marcas chicas en el
-asfalto. Ningún bache resultó crítico, lo que indica que los umbrales
-provisionales de severidad deben calibrarse con baches clasificados por
-expertos. No se reporta precisión de campo porque esos fotogramas no tienen
+asfalto. Ningún bache resultó crítico: el mayor $A_n$ observado fue 0,0049,
+por debajo del umbral de 0,008; en este recorrido no se registraron baches con
+área suficiente para esa categoría. No se reporta precisión de campo porque esos fotogramas no tienen
 etiquetas de referencia, y parte de ellos puede haberse usado en el
 entrenamiento.
 
@@ -295,14 +298,15 @@ Las limitaciones son claras. El modelo no detecta baches chicos o lejanos; con
 un recall de 64,3\,\% en test deja pasar uno de cada tres baches, y su precisión
 de 76,3\,\% implica que uno de cada cuatro avisos es un falso positivo, que el
 feedback ciudadano del mapa ayuda a depurar. El dataset es chico (386
-imágenes, 37 de test) y los umbrales de severidad aún no están calibrados. Tampoco se midió
+imágenes, 37 de test) y los umbrales de severidad deben validarse con más
+baches clasificados. Tampoco se midió
 el error de georreferenciación, que depende de la precisión del GPS del
 teléfono y del supuesto de suelo plano.
 
 Como trabajo futuro se propone: (i) ampliar el dataset con recorridos propios,
 separando entrenamiento y prueba por recorrido; (ii) entrenar con mayor
 resolución o recortes para mejorar la detección de baches chicos; (iii)
-calibrar los umbrales de severidad con baches clasificados en campo;
+refinar los umbrales de severidad con más baches clasificados en campo;
 (iv) medir el error de posición (RMSE) contra coordenadas tomadas con GPS en
 baches reales; y (v) usar el feedback ciudadano del mapa para reentrenar el
 modelo.

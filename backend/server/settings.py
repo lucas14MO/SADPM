@@ -146,6 +146,16 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS Configuration for Frontend access (React/Leaflet)
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        'DJANGO_CSRF_TRUSTED_ORIGINS',
+        'http://127.0.0.1:5173,http://localhost:5173,'
+        'http://127.0.0.1:5174,http://localhost:5174',
+    ).split(',')
+    if origin.strip()
+]
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration

@@ -14,7 +14,7 @@ Para regenerar las figuras (desde la raíz del repositorio, con las
 dependencias de `capture/` instaladas):
 
 ```
-python informe_ieee/generar_figuras.py . informe_ieee/figuras
+python informe_ieee/generar_figuras.py . informe_ieee/figuras [ruta/a/sesion_20261107_174903_f000214.jpg]
 ```
 
 El script también genera PNG de control que no hace falta subir.

@@ -79,9 +79,9 @@ El F1 se calcula como 2·P·R/(P+R) con esos valores. Las métricas de validaci�
 suelen ser más altas que las de test, porque el split de validación se usa para
 elegir la mejor época.
 
-**Pérdidas** (gráficos de Roboflow): [`v4_box_loss.png`](Source/v4_box_loss.png),
-[`v4_class_loss.png`](Source/v4_class_loss.png) y
-[`v4_object_loss.png`](Source/v4_object_loss.png). En la mejor época el
+**Pérdidas** (gráficos de Roboflow): [`BoxLoss.png`](Source/BoxLoss.png),
+[`ClassLoss.png`](Source/ClassLoss.png) y
+[`ObjectLoss.png`](Source/ObjectLoss.png). En la mejor época el
 checkpoint registra `val/box_loss` 2,253, `val/cls_loss` 1,464 y `val/dfl_loss`
 0,018. En el gráfico "Object Loss" de Roboflow corresponde a `dfl_loss`: YOLO26
 no tiene pérdida de objectness.

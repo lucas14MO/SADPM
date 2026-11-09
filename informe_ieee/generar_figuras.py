@@ -90,17 +90,23 @@ ax.grid(lw=0.3, alpha=0.6)
 save(fig, "fig_curvas_v4")
 
 # --- Fig. 4: ejemplo de detección real --------------------------------------
-from ultralytics import YOLO
-img_path = repo / "capture/record_tests/recording_frames/sesion_20261107_174903/sesion_20261107_174903_f000214.jpg"
-model = YOLO(str(repo / "weights" / "weights_v4_monoclass.pt"))
-r = model.predict(str(img_path), conf=0.3, verbose=False)[0]
-im = cv2.imread(str(img_path))
-H = im.shape[0]
-cv2.line(im, (0, int(0.45 * H)), (im.shape[1], int(0.45 * H)), (0, 200, 255), 3)
-for (x1, y1, x2, y2), c in zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist()):
-    cv2.rectangle(im, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 4)
-    cv2.putText(im, f"bache {c:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.3,
-                (0, 0, 255), 3)
-im = cv2.resize(im, (1200, int(1200 * H / im.shape[1])))
-cv2.imwrite(str(out / "fig_ejemplo.jpg"), im, [cv2.IMWRITE_JPEG_QUALITY, 85])
+# Fotograma sesion_20261107_174903_f000214.jpg del dataset de frames del 7/11
+# (ya no está en el repositorio). Pasarlo como tercer argumento para regenerar
+# la figura; si no se pasa, se conserva figuras/fig_ejemplo.jpg.
+img_path = Path(sys.argv[3]) if len(sys.argv) > 3 else None
+if img_path is None or not img_path.is_file():
+    print("fig_ejemplo: sin fotograma de origen; se conserva la figura existente.")
+else:
+    from ultralytics import YOLO
+    model = YOLO(str(repo / "weights" / "weights_v4_monoclass.pt"))
+    r = model.predict(str(img_path), conf=0.3, verbose=False)[0]
+    im = cv2.imread(str(img_path))
+    H = im.shape[0]
+    cv2.line(im, (0, int(0.45 * H)), (im.shape[1], int(0.45 * H)), (0, 200, 255), 3)
+    for (x1, y1, x2, y2), c in zip(r.boxes.xyxy.tolist(), r.boxes.conf.tolist()):
+        cv2.rectangle(im, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 4)
+        cv2.putText(im, f"bache {c:.2f}", (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                    1.3, (0, 0, 255), 3)
+    im = cv2.resize(im, (1200, int(1200 * H / im.shape[1])))
+    cv2.imwrite(str(out / "fig_ejemplo.jpg"), im, [cv2.IMWRITE_JPEG_QUALITY, 85])
 print("listo:", sorted(p.name for p in out.iterdir()))

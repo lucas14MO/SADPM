@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { potholeService } from '../services';
-import type { Pothole, SearchArea, Severity } from '../types/pothole';
+import type { Pothole, Severity } from '../types/pothole';
 
 interface UsePotholesResult {
   potholes: Pothole[];
@@ -9,69 +9,58 @@ interface UsePotholesResult {
   reload: () => void;
 }
 
-interface LoadResult {
-  key: string;
-  data: Pothole[];
-  error: string | null;
+interface SpatialQuery {
+  lat: number;
+  lng: number;
+  radiusMeters: number;
 }
 
-/**
- * Carga los baches (todos o los de `searchArea`, filtrados por el backend) y
- * filtra por gravedad en el cliente. Se vuelve a consultar al cambiar el área
- * o al llamar a `reload`.
- */
+/** Carga los baches del radio seleccionado y filtra por gravedad. */
 export function usePotholes(
   activeSeverities: Severity[],
-  searchArea: SearchArea | null,
+  spatialQuery: SpatialQuery,
 ): UsePotholesResult {
+  const { lat, lng, radiusMeters } = spatialQuery;
+  const [potholes, setPotholes] = useState<Pothole[]>([]);
+  const [requestError, setRequestError] = useState<{ key: string; message: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  const [result, setResult] = useState<LoadResult>({ key: '', data: [], error: null });
-
-  const requestKey = JSON.stringify([
-    reloadToken,
-    searchArea?.lat,
-    searchArea?.lng,
-    searchArea?.radiusMeters,
-  ]);
+  const [completedRequestKey, setCompletedRequestKey] = useState<string | null>(null);
+  const requestKey = JSON.stringify([lat, lng, radiusMeters, activeSeverities, reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
-    const params = searchArea
-      ? { lat: searchArea.lat, lng: searchArea.lng, radiusMeters: searchArea.radiusMeters }
-      : {};
 
     potholeService
-      .getPotholes(params)
+      .getPotholes({ lat, lng, radiusMeters, severities: activeSeverities })
       .then((data) => {
-        if (!cancelled) setResult({ key: requestKey, data, error: null });
+        if (!cancelled) setPotholes(data);
       })
       .catch(() => {
         if (!cancelled) {
-          setResult((previous) => ({
+          setRequestError({
             key: requestKey,
-            data: previous.data,
-            error: 'No se pudieron cargar los baches. Intentá de nuevo.',
-          }));
+            message: 'No se pudieron cargar los baches. Intentá de nuevo.',
+          });
         }
+      })
+      .finally(() => {
+        if (!cancelled) setCompletedRequestKey(requestKey);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [requestKey, searchArea]);
-
-  // Mientras llega la respuesta se siguen mostrando los datos anteriores.
-  const isLoading = result.key !== requestKey;
+  }, [lat, lng, radiusMeters, activeSeverities, requestKey]);
 
   const filtered = useMemo(
-    () => result.data.filter((pothole) => activeSeverities.includes(pothole.severity)),
-    [result.data, activeSeverities],
+    () => potholes.filter((pothole) => activeSeverities.includes(pothole.severity)),
+    [potholes, activeSeverities],
   );
 
   return {
     potholes: filtered,
-    isLoading,
-    error: isLoading ? null : result.error,
+    isLoading: completedRequestKey !== requestKey,
+    error: requestError?.key === requestKey ? requestError.message : null,
     reload: () => setReloadToken((token) => token + 1),
   };
 }

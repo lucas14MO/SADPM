@@ -43,9 +43,10 @@ sintéticas, pero aún no se calibró ni validó con una sesión visual completa
    crop anotado, timestamp y posición usan la misma observación.
 - **Mapeo:** `A_norm < Umbral_Leve` produce `leve`; entre `Umbral_Leve` y
    `Umbral_Crítico`, `moderado`; desde `Umbral_Crítico`, `critico`. Los umbrales
-   deben calibrarse antes de reportar resultados de campo. Defaults actuales:
-   ROI `0.45`, umbrales `0.001`/`0.005`, referencia `0.7` y exponente `2.0`;
-   son valores provisionales, no resultados experimentales.
+   se calibran con la pestaña **Calibración** del frontend y se aplican a la
+   base con `recalcular_severidad` (ver [PIPELINE.md](PIPELINE.md)). Defaults
+   actuales: umbrales `0.001`/`0.008` (calibración del equipo del 9/11/2026);
+   ROI `0.45`, referencia `0.7` y exponente `2.0` siguen siendo provisionales.
    La confianza del modelo se conserva como dato separado de la severidad.
 - **Evidencia y feedback:** el detalle del mapa mostrará el recorte del keyframe
    con su caja dibujada y permitirá reportar falso positivo o bache

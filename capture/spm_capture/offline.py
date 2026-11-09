@@ -24,7 +24,7 @@ POTHOLE_CLASS = "pothole"
 class SeverityConfig:
     roi_horizon_ratio: float = 0.45
     light_area_threshold: float = 0.001
-    critical_area_threshold: float = 0.005
+    critical_area_threshold: float = 0.008
     perspective_reference_ratio: float = 0.7
     perspective_exponent: float = 2.0
     perspective_min_distance_ratio: float = 0.05
