@@ -23,7 +23,7 @@ la cámara, inclinación y campo de visión. Repetir si se mueve la cámara.
 ### Paso 2 — Copiar el GPX a la carpeta de la sesión
 
 Copiar el `.gpx` dentro de cada `recordings/sesion_.../`. Si no está (o hay más
-de uno), `process_video.py` falla y hay que pasarlo con `--gpx ruta/al/track.gpx`.
+de uno), `process_video.py` falla y el archivo debe indicarse con `--gpx ruta/al/track.gpx`.
 
 ### Paso 3 — Detectar y ubicar los baches
 

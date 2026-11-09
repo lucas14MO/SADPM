@@ -21,16 +21,10 @@ El script también genera PNG de control que no hace falta subir.
 
 ## Antes de entregar
 
-1. Completar autores, carrera, institución y correos (marcados con `[...]`).
-2. Resolver los `TODO` del `.tex`:
-   - Un dato local con cita sobre el estado de las calles (MOPC, Municipalidad
-     de Encarnación o prensa).
-   - Confirmar cómo se extrajeron los fotogramas del dataset propio.
-   - Citar el dataset público de Roboflow del que se hizo el *fork* (nombre,
-     autor y URL).
-3. **Ajustar a exactamente 3 páginas.** El texto está calculado para unas 3
-   páginas, pero no se pudo compilar acá. Si sobra espacio: ampliar la
-   discusión. Si falta espacio, quitar en este orden:
-   - la figura de curvas de validación (`fig:curvas`) y su párrafo,
-   - la foto de ejemplo (`fig:ejemplo`),
-   - la subsección "Métricas no reportadas" (resumirla en una frase).
+1. **Verificar que sean exactamente 3 páginas.** Con el texto reducido (~1125
+   palabras de cuerpo) el informe compiló en 3 páginas con la tercera casi
+   vacía; por eso se reincorporaron la foto de detección y las curvas de
+   validación. Si con ellas pasa a 4 páginas, quitar primero las curvas
+   (`fig:curvas` y su párrafo) y después la foto (`fig:ejemplo`).
+2. Verificar en la nota de Más Encarnación la fecha de publicación citada
+   (7/7/2026).

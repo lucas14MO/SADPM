@@ -64,7 +64,7 @@ for k, (vals, lab, c) in enumerate([(m50, "mAP@50", "#3b6ea8"), (m75, "mAP@75", 
                                     (m5095, "mAP@50-95", "#c9d9ee")]):
     bars = ax.bar(x + (k - 1) * bw, vals, bw, label=lab, color=c, ec="#333", lw=0.4)
     for b, v in zip(bars, vals):
-        ax.text(b.get_x() + b.get_width() / 2, v + 1.2, f"{v:.1f}", ha="center", va="bottom",
+        ax.text(b.get_x() + b.get_width() / 2, v + 1.2, f"{v:.1f}".replace(".", ","), ha="center", va="bottom",
                 fontsize=5.4)
 ax.set_xticks(x, cats); ax.set_ylabel("%"); ax.set_ylim(0, 85)
 ax.spines[["top", "right"]].set_visible(False)

@@ -37,8 +37,8 @@ src/
 ## Conectar el backend real
 
 1. Copiar `.env.example` a `.env.local`.
-2. Poner `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` apuntando a la API Django.
-3. Listo — `src/services/index.ts` resuelve automáticamente a `ApiPotholeService`
+2. Definir `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` con la URL de la API Django.
+3. Con esa configuración, `src/services/index.ts` resuelve automáticamente a `ApiPotholeService`
    (`src/services/apiPotholeService.ts`), que ya espera el contrato de
    `/api/baches/?lat=&lng=&radio=&gravedad=` descrito en `fases.md` (Fase 7).
 

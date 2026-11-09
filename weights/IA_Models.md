@@ -34,27 +34,40 @@ el modelo de la iteración 9.
 
 | Campo | Valor | Fuente |
 | --- | --- | --- |
-| Imágenes | 386 (143 propias + 243 seleccionadas de un dataset público) | Reportado por el equipo |
-| Origen de las imágenes públicas | *Fork* de un dataset público de Roboflow | Reportado por el equipo |
-| Conjunto de test | 10% (37 imágenes) | Roboflow (evaluación del modelo) |
-| Conjunto valid| 19% (74 imágenes) | Roboflow (evaluación del modelo) |
-| Conjunto train| 71% (275 imágenes) | Roboflow (evaluación del modelo) |
+| Imágenes | 386 (143 propias + 243 seleccionadas de un dataset público) | Registro del equipo |
+| Dataset en Roboflow Universe | `lucas-benitez/pothole-vhmow-bygvr` (*fork* de un dataset público; Roboflow no muestra el dataset de origen) | Roboflow Universe |
+| Licencia del dataset | CC BY 4.0 | Roboflow Universe |
+| Conjunto de entrenamiento | 71 % (275 imágenes) | Roboflow |
+| Conjunto de validación | 19 % (74 imágenes) | Roboflow |
+| Conjunto de test | 10 % (37 imágenes, 70 baches etiquetados) | Roboflow |
 | Épocas configuradas | 300 (`patience` 90) | Checkpoint |
 | Mejor época (por mAP@50-95 de validación) | 281 | Checkpoint |
 | Tamaño de entrada / batch | 640 px / 31 | Checkpoint |
 | Optimizador / `lr0` / semilla | `auto` / 0,01 / 0 | Checkpoint |
 | Versión de Ultralytics del entrenamiento | 8.4.55 | Checkpoint |
 
-Falta el nombre y la URL del dataset público original (para citarlo y
-verificar su licencia) y el split train/valid.
+El dataset se publicó en Roboflow Universe como *fork* de un dataset público.
+Roboflow no expone el dataset de origen, por lo que la cita corresponde al
+dataset del proyecto. La licencia del dataset es CC BY 4.0; la del modelo,
+AGPL-3.0.
 
-```
-Cite This Project
-License
-CC BY 4.0
+**Extracción de los fotogramas propios.** Los fotogramas se extrajeron de los
+videos de las sesiones del 7/11/2026. Cada sesión tiene un `frames_index.csv`
+con el número de fotograma, la hora UTC, un índice de nitidez (`sharpness`) y un
+índice de cambio respecto del fotograma anterior (`change`). El script de
+extracción no se conserva en el repositorio; los índices muestran el criterio
+aplicado:
 
-If you use this dataset in a research paper, please cite it using the following BibTeX:
+- Muestreo base de un fotograma por segundo (saltos de 30–31 fotogramas a
+  ~30,5 fps; 364 de 395 intervalos).
+- Fotogramas adicionales cuando el cambio respecto del anterior es alto (los
+  intervalos menores a 25 fotogramas tienen `change` ≥ 34).
+- Ningún fotograma conservado tiene `sharpness` < 100, lo que indica un descarte
+  de imágenes borrosas.
 
+Cita del dataset (BibTeX provisto por Roboflow Universe):
+
+```bibtex
 @misc{ pothole-vhmow-bygvr_dataset,
   title = { pothole Dataset },
   type = { Open Source Dataset },
@@ -243,9 +256,7 @@ porque se evaluó sobre otro dataset.
 
 ## Pendiente
 
-- Nombre, URL y licencia del dataset público de Roboflow del que se hizo el
-  *fork* (para citarlo en el informe).
-- Split train/valid de V4 y umbral de confianza usado en la evaluación de test.
+- Umbral de confianza usado por Roboflow en la evaluación de test.
 - Para una evaluación de campo, etiquetar fotogramas de un recorrido **no usado
   en entrenamiento**, separando por recorrido para evitar fotogramas casi
   idénticos entre train y test.
