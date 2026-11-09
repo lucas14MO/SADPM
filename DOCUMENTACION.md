@@ -9,15 +9,15 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | --- | --- | --- |
 | 1 | Captura de video + timestamps por fotograma | ✅ Hecho (`capture/capture.py`) |
 | 1 | Captura del GPS (`.gpx`) | ⚠️ Externo: se hace con una app/módulo GPS logger; **no hay código** |
-| 2 | Dataset y etiquetado | ⚠️ V4 reporta 386 imágenes (143 propias, 243 públicas seleccionadas); split y evaluación pendientes |
-| 3 | Entrenamiento propio | ✅ V3 histórico y V4 YOLO26 Small monoclass registrados; métricas/licencia V4 por verificar (ver [IA_Models.md](weights/IA_Models.md)) |
+| 2 | Dataset y etiquetado | ⚠️ V4: 386 imágenes (143 propias, 243 públicas seleccionadas); split no documentado |
+| 3 | Entrenamiento propio | ✅ V4 YOLO26 Small monoclass (Roboflow iteración 9, AGPL-3.0): mAP@50 60,8 % (Roboflow) / 69,9 % (validación); matriz de confusión y P/R de test pendientes (ver [IA_Models.md](weights/IA_Models.md)) |
 | 4 | ROI de asfalto y severidad por área relativa | ✅ Implementado en `process_video.py`; parámetros provisionales, falta calibración de campo |
-| 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`) |
+| 5 | Detección + tracking | ✅ En vivo (`capture/detect.py`, V4) y offline (`process_video.py`, V4 + ByteTrack) |
 | 5 | **Georreferenciación offline (unir detecciones con GPS)** | ✅ Implementada en `capture/process_video.py` |
 | 6 | Deduplicación espacial (DBSCAN) | ✅ Implementada al importar/reconstruir en Django/PostGIS (`eps=2.5 m` inicial) |
-| 7 | Backend Django REST | ✅ Importación, persistencia de evidencia y feedback implementados; migración PostGIS aún por aplicar/verificar |
-| 8 | Frontend mapa (React + Leaflet) | ✅ Cliente API y acciones de feedback implementados; build pendiente por falta de Node/npm |
-| 9 | Integración end-to-end | ⚠️ Importación backend implementada; demo completa y conexión frontend/backend por validar |
+| 7 | Backend Django REST | ✅ Importación, evidencia y feedback; migraciones 0001–0003 aplicadas y 14 tests OK en PostGIS (Docker) |
+| 8 | Frontend mapa (React + Leaflet) | ✅ Cliente API y feedback; build OK y conectado a la API real; revisión visual de la UI pendiente |
+| 9 | Integración end-to-end | ⚠️ Probada con 403 fotogramas + GPX del 7/11 (89 baches en el mapa); falta un recorrido completo en video a 30 fps |
 
 > **Importante:** la captura no guarda coordenadas GPS en `video.mp4`; la Fase 5
 > las asigna después mediante el `.gpx` y el timestamp UTC por fotograma de
@@ -84,8 +84,10 @@ python detect.py --camera 1 --conf 0.4     # más confianza mínima = menos fals
 python detect.py --camera 1 --imgsz 480    # más fps, menos precisión en baches chicos
 ```
 
-Este flujo en vivo conserva su modelo y comportamiento actuales. V4 monoclass
-se activa en el procesamiento offline con `process_video.py`, no en `detect.py`.
+El flujo en vivo usa por defecto el mismo modelo V4 monoclass que el
+procesamiento offline (`weights/weights_v4_monoclass.pt`). Como detecta y graba
+en el mismo bucle, el video queda por debajo de 30 fps en CPU; los recorridos
+para `process_video.py` se graban con `capture.py`.
 
 Opciones comunes: `--width/--height/--fps` (default 1920×1080 @ 30, MJPG),
 `--out` (carpeta de salida; por defecto `capture/recordings`, pero puede
@@ -323,10 +325,9 @@ capture/
       └── offline.py         # Tracking batch, interpolación GPX y exportación JSON
 ```
 
-El flujo en vivo `detect.py` puede descargar su modelo predeterminado
-YOLO11n (`tahaUgan/pothole-yolo11n`) la primera vez en `capture/models/`.
-El procesamiento offline usa el archivo indicado por `--model`, por ejemplo
-`../weights/weights.pt`; son rutas/modelos distintos.
+El flujo en vivo `detect.py` y el procesamiento offline usan por defecto el
+mismo modelo, `../weights/weights_v4_monoclass.pt` (o el indicado con
+`--model`; en offline debe tener la única clase `pothole`).
 
 ## 10. Problemas comunes
 
@@ -377,11 +378,14 @@ desfase, documentarlo y configurar la calibración. Revisar cobertura GPX y
 ### Procedimiento de demo y uso
 
 1. Preparar entorno de captura e identificar cámara con `python capture.py --list`.
-2. En recorrido controlado, iniciar GPX y video/detección; conservar la carpeta
-   completa de sesión y el GPX.
-3. Procesar desde `capture/` con el modelo documentado en
-   [IA_Models.md](weights/IA_Models.md):
-   `python process_video.py recordings/<sesion> --model ../weights/weights.pt`.
+2. En recorrido controlado, iniciar el GPX **antes** que el video/detección (si el
+   GPX empieza después, los primeros segundos quedan sin coordenadas); conservar
+   la carpeta completa de sesión y copiar el `.gpx` dentro de ella (o pasarlo con
+   `--gpx`).
+3. Procesar desde `capture/` con el modelo V4 monoclass documentado en
+   [IA_Models.md](weights/IA_Models.md), que es el predeterminado:
+   `python process_video.py recordings/<sesion> --calibration camera_calibration.json`.
+   El modelo V3 (`weights.pt`, tres clases) ya no es compatible con este paso.
 4. Revisar `processed_potholes.json`, recortes, coordenadas y cobertura temporal.
 5. Iniciar PostGIS/API según [backend/README.md](backend/README.md) e importar la
    sesión con `import_processed_potholes` (incluyendo el volumen de solo lectura
