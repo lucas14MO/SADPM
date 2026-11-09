@@ -24,7 +24,7 @@ El script también genera PNG de control que no hace falta subir.
 1. **Ajustar a exactamente 3 páginas.** La primera compilación dio 4 páginas;
    el texto se redujo en consecuencia (cuerpo de ~1650 a ~1125 palabras, sin la
    foto de ejemplo ni la tabla de la prueba de campo).
-   - Si sobra espacio: descomentar las figuras opcionales de la sección de
+   - Versión actual: 3 páginas en Overleaf, con todas las figuras.
      resultados (foto de ejemplo y curvas de validación).
    - Si aún falta espacio: quitar la Fig. de mAP por tamaño y dejar sus valores
      en el texto.

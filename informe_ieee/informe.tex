@@ -12,6 +12,7 @@
 \graphicspath{{figuras/}{./}}
 
 \begin{document}
+\renewcommand{\IEEEkeywordsname}{Palabras clave}
 
 \title{SAD Pothole Map: detección, georreferenciación y mapeo automático de baches con YOLO26 en Encarnación, Paraguay}
 
@@ -143,7 +144,7 @@ usa para elegir la época. V4 supera a V3 en 21,6 puntos de mAP@50, aunque cada
 uno se evaluó sobre su propio dataset.
 
 \begin{table}[!htbp]
-\caption{Métricas de las versiones del detector (\%)}
+\caption{Métricas de las versiones del detector, en porcentaje}
 \label{tab:modelos}
 \centering
 \setlength{\tabcolsep}{3.2pt}
@@ -195,20 +196,15 @@ requiere coordenadas de referencia medidas en campo.
 \label{fig:map}
 \end{figure}
 
-% Figura opcional (si sobra espacio): curvas de validación de V4.
-% \begin{figure}[!htbp]
-% \centering
-% \includegraphics[width=\columnwidth]{fig_curvas_v4.pdf}
-% \caption{Métricas de validación de V4 durante el entrenamiento.}
-% \end{figure}
+La Fig.~\ref{fig:curvas} muestra que las métricas de validación se estabilizan
+a partir de la época 150, sin caídas posteriores.
 
-% Figura opcional (si sobra espacio): detección real con la línea de la ROI.
-% \begin{figure}[!htbp]
-% \centering
-% \includegraphics[width=\columnwidth]{fig_ejemplo.jpg}
-% \caption{Detección en una calle de Encarnación (confianza 0,84). La línea
-% horizontal marca el límite de la ROI.}
-% \end{figure}
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_curvas_v4.pdf}
+\caption{Métricas de validación de V4 durante el entrenamiento.}
+\label{fig:curvas}
+\end{figure}
 
 \subsection{Tiempo de inferencia y prueba de campo}
 En un Intel Core i7-12700F sin GPU, V4 procesa un fotograma en 51\,ms (unos
@@ -220,9 +216,18 @@ En la prueba de campo se procesaron 403 fotogramas de cinco recorridos del
 cuales 115 quedaron dentro de la ROI y se georreferenciaron; DBSCAN las
 consolidó en 89 baches (61 leves y 28 moderados). Ninguno resultó crítico: el
 mayor $A_n$ fue 0,0049, por debajo del umbral de 0,008. La inspección visual
-mostró falsos positivos en grietas y marcas pequeñas. No se reporta precisión de
-campo porque esos fotogramas no tienen etiquetas y parte de ellos pudo usarse en
-el entrenamiento.
+mostró falsos positivos en grietas y marcas pequeñas; la Fig.~\ref{fig:ejemplo}
+muestra una detección correcta. No se reporta precisión de campo porque esos
+fotogramas no tienen etiquetas y parte de ellos pudo usarse en el
+entrenamiento.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\columnwidth]{fig_ejemplo.jpg}
+\caption{Detección en una calle de Encarnación (confianza 0,84). La línea
+horizontal marca el límite de la ROI.}
+\label{fig:ejemplo}
+\end{figure}
 
 \section{Conclusiones y trabajo futuro}
 
