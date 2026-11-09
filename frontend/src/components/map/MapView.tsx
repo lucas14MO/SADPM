@@ -34,7 +34,7 @@ function CenterPicker({ onSelectCenter }: Pick<MapViewProps, 'onSelectCenter'>) 
   return null;
 }
 
-function FocusPothole({ pothole }: Pick<MapViewProps, 'focusedPothole'>) {
+function FocusPothole({ pothole }: { pothole: MapViewProps['focusedPothole'] }) {
   const map = useMap();
   useEffect(() => {
     if (pothole) map.setView([pothole.lat, pothole.lng], Math.max(map.getZoom(), 16), { animate: true });
