@@ -35,14 +35,17 @@ el modelo de la iteración 9.
 | Campo | Valor | Fuente |
 | --- | --- | --- |
 | Imágenes | 386 (143 propias + 243 seleccionadas de un dataset público) | Reportado por el equipo |
-| Split train/valid/test | No informado | — |
+| Origen de las imágenes públicas | *Fork* de un dataset público de Roboflow | Reportado por el equipo |
+| Conjunto de test | 37 imágenes (70 baches etiquetados) | Roboflow (evaluación del modelo) |
+| Split train/valid | No informado | — |
 | Épocas configuradas | 300 (`patience` 90) | Checkpoint |
 | Mejor época (por mAP@50-95 de validación) | 281 | Checkpoint |
 | Tamaño de entrada / batch | 640 px / 31 | Checkpoint |
 | Optimizador / `lr0` / semilla | `auto` / 0,01 / 0 | Checkpoint |
 | Versión de Ultralytics del entrenamiento | 8.4.55 | Checkpoint |
 
-Falta documentar la procedencia exacta de las 243 imágenes públicas y el split.
+Falta el nombre y la URL del dataset público original (para citarlo y
+verificar su licencia) y el split train/valid.
 
 ### Métricas
 
@@ -83,10 +86,28 @@ checkpoint registra `val/box_loss` 2,253, `val/cls_loss` 1,464 y `val/dfl_loss`
 0,018. En el gráfico "Object Loss" de Roboflow corresponde a `dfl_loss`: YOLO26
 no tiene pérdida de objectness.
 
-**Matriz de confusión de V4: no disponible.** La matriz que existe en el
-repositorio (`Source/matris_confusion.png`) es la de V3, con tres clases. Para
-V4 corresponde una matriz de 2×2 (`pothole` / fondo), que hay que exportar desde
-Roboflow o generar con `yolo val`.
+**c) Matriz de confusión en test** (Roboflow, conjunto de test de 37 imágenes,
+70 baches): [`Source/v4_matriz_confusion_test.png`](Source/v4_matriz_confusion_test.png).
+Filas: Ground Truth; columnas: Prediction.
+
+| Ground Truth \\ Prediction | `pothole` | No detectado (FN) |
+| --- | ---: | ---: |
+| `pothole` | 45 | 25 |
+| Fondo (falso positivo) | 14 | — |
+
+| Precisión | Recall | F1 |
+| ---: | ---: | ---: |
+| 76,3 % | 64,3 % | 69,8 % |
+
+Calculadas con la matriz: P = 45/(45+14), R = 45/(45+25), F1 = 2·45/(2·45+14+25).
+Son las métricas de V4 **más confiables para el informe**, porque el test no se
+usa para entrenar ni para elegir la época. El umbral de confianza de la
+evaluación no se indica en la captura (Roboflow usa uno por defecto).
+
+Comparadas con las de validación (P 88,4 %, R 66,1 %), el recall se mantiene y
+la precisión baja 12 puntos: en imágenes nuevas el modelo marca más falsos
+positivos. Coincide con la prueba de campo, donde aparecieron grietas y marcas
+detectadas como baches.
 
 ### Rendimiento local (medido en este repositorio)
 
@@ -191,20 +212,18 @@ porque se evaluó sobre otro dataset.
 | Métrica pedida | Estado para V4 |
 | --- | --- |
 | mAP | ✅ Roboflow (60,8 % / 28,3 %) y checkpoint (69,9 % / 36,7 %) |
-| F1-score | ✅ 75,6 %, calculado con P/R de validación del checkpoint. Para test hace falta exportar P/R de Roboflow |
-| Precisión / Recall | ✅ Validación (88,4 % / 66,1 %). Test: pendiente |
-| Matriz de confusión | ❌ Solo existe la de V3. Exportar la de V4 desde Roboflow o con `yolo val` |
+| F1-score | ✅ Test: 69,8 % (matriz de Roboflow). Validación: 75,6 % |
+| Precisión / Recall | ✅ Test: 76,3 % / 64,3 %. Validación: 88,4 % / 66,1 % |
+| Matriz de confusión | ✅ V4 en test (2×2) y V3 (3 clases) |
 | Tiempo de inferencia | ✅ ~51 ms/fotograma en CPU local; 7,5 ms en la nube de Roboflow |
 | Accuracy | ⚠️ No es una métrica estándar en detección de objetos (no hay "verdaderos negativos" contables). Se puede reportar la exactitud de severidad de V3 (90,6 % de los detectados) o justificar que no aplica |
 | RMSE | ⚠️ No aplica a la detección. Se puede usar para el **error de georreferenciación**: medir con GPS la posición real de 10–20 baches y comparar con la del sistema. Requiere trabajo de campo |
 
 ## Pendiente
 
-- Exportar desde Roboflow la precisión, recall y matriz de confusión de V4 en el
-  split de test, e indicar el umbral de confianza.
-- Documentar el split train/valid/test de V4 y la procedencia de las 243
-  imágenes públicas.
-- Confirmar si la licencia AGPL-3.0 cubre también el dataset.
+- Nombre, URL y licencia del dataset público de Roboflow del que se hizo el
+  *fork* (para citarlo en el informe).
+- Split train/valid de V4 y umbral de confianza usado en la evaluación de test.
 - Para una evaluación de campo, etiquetar fotogramas de un recorrido **no usado
   en entrenamiento**, separando por recorrido para evitar fotogramas casi
   idénticos entre train y test.

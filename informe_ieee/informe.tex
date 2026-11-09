@@ -34,10 +34,10 @@ reclamos ciudadanos, lo que retrasa su reparación. Este trabajo presenta SAD
 Pothole Map (SPM), un sistema de bajo costo que detecta baches en video tomado
 desde un vehículo, los georreferencia con GPS y los publica en un mapa web. El pipeline combina un detector YOLO26 Small
 de una clase entrenado con 386 imágenes (143 propias), seguimiento con
-ByteTrack, una severidad determinista basada en el área normalizada del bache,
-proyección de la detección sobre la calzada mediante una cámara calibrada y
-deduplicación espacial con DBSCAN en PostGIS. El modelo alcanzó un mAP@50 de
-60,8\,\% y un F1 de validación de 75,6\,\%, con 51\,ms por fotograma en CPU. En
+ByteTrack, severidad por área normalizada, proyección sobre la calzada con una
+cámara calibrada y deduplicación con DBSCAN en PostGIS. En test, el modelo
+alcanzó un mAP@50 de 60,8\,\%, una precisión de 76,3\,\% y un recall de
+64,3\,\% (F1 de 69,8\,\%), con 51\,ms por fotograma en CPU. En
 una prueba de campo en Encarnación se georreferenciaron 115 detecciones,
 consolidadas en 89 baches. El modelo no detecta baches pequeños (mAP 0\,\%), la
 principal limitación identificada.
@@ -113,7 +113,9 @@ Por eso V4 se entrenó como detector de una sola clase (\texttt{pothole}) y la
 severidad se calcula aparte, con una regla geométrica. V4 usa YOLO26 Small
 \cite{ultralytics} preentrenado, con 386 imágenes etiquetadas en Roboflow
 \cite{roboflow}: 143 propias de calles de Encarnación y 243 seleccionadas de un
-dataset público. Se entrenó con imágenes de 640\,px, hasta 300 épocas y parada
+\emph{fork} de un dataset público de Roboflow.
+% TODO: citar el dataset público original (nombre, autor y URL de Roboflow Universe).
+El conjunto de test tiene 37 imágenes con 70 baches. Se entrenó con imágenes de 640\,px, hasta 300 épocas y parada
 temprana con paciencia 90; la mejor época de validación fue la 281.
 
 \subsection{Seguimiento, severidad y georreferenciación}
@@ -150,10 +152,11 @@ positivo o 1 de reparación, el bache se oculta.
 \section{Resultados y discusión}
 
 \subsection{Desempeño del detector}
-La Tabla~\ref{tab:modelos} compara las versiones del modelo. Las métricas de V4
-provienen de dos fuentes: la evaluación de Roboflow y la validación guardada en
+La Tabla~\ref{tab:modelos} compara las versiones del modelo. Para V4 se
+reportan el conjunto de test, evaluado en Roboflow, y la validación guardada en
 el checkpoint (mejor época). El F1 se calcula como $2PR/(P+R)$. Las métricas de
-validación son optimistas porque ese conjunto se usa para elegir la época.
+validación son optimistas porque ese conjunto se usa para elegir la época; las
+de test son la referencia.
 
 \begin{table}[t]
 \caption{Métricas de las versiones del detector}
@@ -166,19 +169,37 @@ Modelo (fuente) & mAP@50 & mAP@50-95 & P & R & F1 \\
 \midrule
 V2, 1 clase & 82,7 & --- & 86,4 & 75,5 & 80,6 \\
 V3, Nano, 3 clases (Roboflow) & 39,2 & 16,9 & 63,1 & 46,2 & 53,3 \\
-V4, Small, 1 clase (Roboflow) & 60,8 & 28,3 & --- & --- & --- \\
+V4, Small, 1 clase (test) & 60,8 & 28,3 & 76,3 & 64,3 & 69,8 \\
 V4, Small, 1 clase (validación) & 69,9 & 36,7 & 88,4 & 66,1 & 75,6 \\
 \bottomrule
 \multicolumn{6}{@{}p{\columnwidth}@{}}{\footnotesize Valores en \%. F1 calculado
-con P y R. Cada versión se evaluó sobre su propio dataset.}
+con P y R. P y R de V4 en test, según su matriz de confusión
+(Tabla~\ref{tab:confusion}). Cada versión se evaluó sobre su propio dataset.}
 \end{tabular}
 \end{table}
 
 V4 supera a V3 en 21,6 puntos de mAP@50, aunque cada uno se evaluó sobre su
 propio dataset. Pasar a una sola clase concentra el
-aprendizaje en la localización, que era el punto débil de V3. La precisión de
-validación (88,4\,\%) es alta y el recall (66,1\,\%) es menor: el modelo
-reporta pocos falsos positivos y se le escapa uno de cada tres baches.
+aprendizaje en la localización, que era el punto débil de V3: V3 detectaba la
+mitad de los baches y V4 detecta casi dos de cada tres. La matriz de confusión
+de V4 en test (Tabla~\ref{tab:confusion}) muestra 45 baches detectados, 25 no
+detectados y 14 falsos positivos. Frente a la validación, el recall se mantiene
+(64,3\,\% contra 66,1\,\%), pero la precisión baja 12 puntos: en imágenes nuevas
+el modelo marca más falsos positivos, como grietas y parches.
+
+\begin{table}[t]
+\caption{Matriz de confusión de V4 en test (37 imágenes)}
+\label{tab:confusion}
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Real $\backslash$ Predicción & Bache & No detectado \\
+\midrule
+Bache & \textbf{45} & 25 \\
+Fondo (falso positivo) & 14 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 La Fig.~\ref{fig:map} desglosa el mAP por tamaño de objeto según la convención
 COCO \cite{lin2014}. El modelo funciona bien con baches grandes (mAP@50 de
@@ -187,28 +208,6 @@ importa en la práctica: un bache lejano se ve chico, así que el sistema solo l
 detecta cuando el vehículo se acerca. El seguimiento compensa en parte, porque
 el mismo bache aparece en varios fotogramas.
 
-La Tabla~\ref{tab:confusion} muestra la matriz de confusión de V3, la única
-disponible (la de V4, de una clase, debe exportarse de Roboflow). Los errores
-se concentran en la columna de falsos negativos (32 de 64 baches) y en 15
-falsos positivos, mientras que las confusiones entre severidades son apenas 3.
-Esta lectura justificó el paso a un detector de una clase.
-
-\begin{table}[t]
-\caption{Matriz de confusión de V3 (filas: real; columnas: predicción)}
-\label{tab:confusion}
-\centering
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Real $\backslash$ Predicción & Crítico & Leve & Moderado & No detectado \\
-\midrule
-Crítico & \textbf{14} & 1 & 0 & 6 \\
-Leve & 0 & \textbf{7} & 0 & 10 \\
-Moderado & 1 & 1 & \textbf{8} & 16 \\
-Fondo (falso positivo) & 0 & 9 & 6 & --- \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 \begin{figure}[t]
 \centering
@@ -292,9 +291,11 @@ severidad: un detector de una clase superó en 21,6 puntos de mAP@50 al modelo
 de tres clases (cada uno en su propio dataset), y la severidad pasó a ser una regla geométrica configurable y
 explicable.
 
-Las limitaciones son claras. El modelo no detecta baches chicos o lejanos, y
-el recall de 66\,\% deja pasar uno de cada tres baches. El dataset es chico (386
-imágenes) y los umbrales de severidad aún no están calibrados. Tampoco se midió
+Las limitaciones son claras. El modelo no detecta baches chicos o lejanos; con
+un recall de 64,3\,\% en test deja pasar uno de cada tres baches, y su precisión
+de 76,3\,\% implica que uno de cada cuatro avisos es un falso positivo, que el
+feedback ciudadano del mapa ayuda a depurar. El dataset es chico (386
+imágenes, 37 de test) y los umbrales de severidad aún no están calibrados. Tampoco se midió
 el error de georreferenciación, que depende de la precisión del GPS del
 teléfono y del supuesto de suelo plano.
 
