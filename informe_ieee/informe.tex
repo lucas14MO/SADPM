@@ -29,55 +29,48 @@ lucabenitezs23@gmail.com, obaezemanuel@gmail.com}
 
 \begin{abstract}
 En las ciudades paraguayas los baches se relevan con inspecciones manuales y
-reclamos ciudadanos, lo que retrasa su reparación. Este trabajo presenta SAD
-Pothole Map (SPM), un sistema de bajo costo que detecta baches en video tomado
-desde un vehículo, los georreferencia con GPS y los publica en un mapa web. El pipeline combina un detector YOLO26 Small
-de una clase entrenado con 386 imágenes (143 propias), seguimiento con
-ByteTrack, severidad por área normalizada, proyección sobre la calzada con una
-cámara calibrada y deduplicación con DBSCAN en PostGIS. En test, el modelo
-alcanzó un mAP@50 de 60,8\,\%, una precisión de 76,3\,\% y un recall de
-64,3\,\% (F1 de 69,8\,\%), con 51\,ms por fotograma en CPU. En
-una prueba de campo en Encarnación se georreferenciaron 115 detecciones,
-consolidadas en 89 baches. El modelo no detecta baches pequeños (mAP 0\,\%), la
-principal limitación identificada.
+reclamos ciudadanos. Este trabajo presenta SAD Pothole Map (SPM), un sistema de
+bajo costo que detecta baches en video tomado desde un vehículo, los
+georreferencia con GPS y los publica en un mapa web. El pipeline combina un
+detector YOLO26 Small de una clase entrenado con 386 imágenes (143 propias),
+seguimiento con ByteTrack, severidad por área normalizada, proyección sobre la
+calzada con una cámara calibrada y deduplicación con DBSCAN en PostGIS. En
+test, el modelo alcanzó un mAP@50 de 60,8\,\%, una precisión de 76,3\,\% y un
+recall de 64,3\,\% (F1 de 69,8\,\%), con 51\,ms por fotograma en CPU. En una
+prueba de campo en Encarnación se georreferenciaron 115 detecciones,
+consolidadas en 89 baches. La principal limitación es que el modelo no detecta
+baches pequeños (mAP de 0\,\%).
 \end{abstract}
 
 \begin{IEEEkeywords}
-detección de baches, YOLO, visión por computadora, georreferenciación, SIG, Paraguay
+detección de baches, YOLO, visión por computadora, georreferenciación, Paraguay
 \end{IEEEkeywords}
 
 \section{Introducción y contexto}
 
 El deterioro de la calzada es un problema persistente en las ciudades del
-Paraguay. Las lluvias intensas, el tránsito pesado y el mantenimiento reactivo
-hacen que los baches aparezcan y crezcan entre una inspección y la siguiente.
-En Encarnación, la Municipalidad presentó en 2026 la plataforma ``Chau
-Baches'', que recibe por WhatsApp fotos y ubicaciones enviadas por los vecinos
-y las clasifica por peligrosidad en un mapa \cite{chaubaches2026}. En una
-primera etapa, solo en el microcentro, se identificaron 119 baches causados por
-pérdidas de agua, de los cuales 43 habían sido reparados y 76 seguían
-pendientes \cite{chaubaches2026}. El relevamiento depende así de reportes
-manuales: no cubre de forma sistemática toda la red vial y su calidad depende
-de que alguien envíe el aviso. Un sistema automático que recorra las calles con una cámara común y
-publique los baches en un mapa complementaría esos reportes, reduciría el costo
-del relevamiento y daría información abierta a la ciudadanía y al municipio.
+Paraguay. En Encarnación, la Municipalidad presentó en 2026 la plataforma
+``Chau Baches'', que recibe por WhatsApp fotos y ubicaciones enviadas por los
+vecinos; solo en el microcentro identificó 119 baches causados por pérdidas de
+agua, de los cuales 76 seguían pendientes de reparación \cite{chaubaches2026}.
+Ese relevamiento depende de que alguien envíe el aviso y no cubre de forma
+sistemática la red vial. Un sistema que recorra las calles con una cámara común
+y publique los baches en un mapa complementaría esos reportes y reduciría el
+costo del relevamiento.
 
-Los primeros sistemas automáticos usaron acelerómetros en vehículos
-\cite{eriksson2008} o procesamiento clásico de imágenes \cite{koch2011}. Con el
-aprendizaje profundo, los detectores de una etapa de la familia YOLO
-\cite{redmon2016} se volvieron el enfoque dominante: Maeda \emph{et al.}
-\cite{maeda2018} publicaron un dataset de daños viales capturado con teléfonos,
-y el desafío GRDDC \cite{arya2020} comparó soluciones de detección de daños en
-varios países. Estos trabajos se centran en la detección por imagen. SPM
-completa el ciclo: detección, seguimiento entre fotogramas, georreferenciación
-del bache (no del vehículo), consolidación de observaciones repetidas y
-validación ciudadana en un mapa web, con datos y condiciones de Encarnación.
+Los primeros sistemas automáticos usaron acelerómetros \cite{eriksson2008} o
+procesamiento clásico de imágenes \cite{koch2011}. Con el aprendizaje profundo
+dominan los detectores de una etapa de la familia YOLO \cite{redmon2016}: Maeda
+\emph{et al.} \cite{maeda2018} publicaron un dataset de daños viales tomado con
+teléfonos, y el desafío GRDDC \cite{arya2020} comparó soluciones en varios
+países. Estos trabajos se centran en la detección por imagen; SPM completa el
+ciclo con seguimiento, georreferenciación del bache, consolidación de
+observaciones repetidas y validación ciudadana en un mapa web.
 
 \section{Metodología y arquitectura del sistema}
 
-La Fig.~\ref{fig:pipeline} resume el pipeline. Todo el procesamiento de visión
-corre \emph{offline}, sobre el video ya grabado, para no reducir la tasa de
-captura.
+La Fig.~\ref{fig:pipeline} resume el pipeline. El procesamiento de visión se
+ejecuta \emph{offline}, sobre el video ya grabado.
 
 \begin{figure*}[t]
 \centering
@@ -86,92 +79,71 @@ captura.
 \label{fig:pipeline}
 \end{figure*}
 
-\subsection{Captura de datos}
-La captura se realizó desde un automóvil con dos integrantes del equipo: uno
-conducía y el otro, como acompañante, operaba una laptop con el software de
-captura y una cámara DJI Osmo Pocket 3 conectada. El software graba video 1080p
-a 30\,fps y guarda la hora UTC de cada fotograma. En paralelo, la aplicación
-Open GPX Tracker 1.10.1 para iOS registró el recorrido con un punto por
-segundo (mediana) y lo exportó en formato GPX. Ambas fuentes se sincronizan
-por la hora UTC, sin hardware dedicado. Antes de grabar, con el vehículo
-detenido, se calibró la cámara sobre el asfalto; la calibración registra la altura de la cámara (1,35\,m), su
-inclinación (\ang{1.462}) y su campo de visión horizontal (\ang{118.15}).
+\subsection{Captura y preprocesamiento}
+La captura se realizó desde un automóvil: un integrante conducía y el otro, como
+acompañante, operaba una laptop con el software de captura y una cámara DJI
+Osmo Pocket 3, que graba video 1080p a 30\,fps con la hora UTC de cada
+fotograma. En paralelo, la aplicación Open GPX Tracker 1.10.1 para iOS registró
+el recorrido (un punto por segundo) en formato GPX; ambas fuentes se unen por la
+hora UTC. Antes de grabar, con el vehículo detenido, se calibró la cámara sobre
+el asfalto: altura de 1,35\,m, inclinación de \ang{1.462} y campo de visión
+horizontal de \ang{118.15}.
 
-\subsection{Preprocesamiento}
-De los videos propios se extrajo un fotograma por segundo, más fotogramas
-adicionales cuando el cambio respecto del anterior era alto. Para cada uno se
-registró su hora UTC, un índice de nitidez y un índice de cambio; se
-descartaron los fotogramas borrosos (ninguno de los conservados tiene un índice
-de nitidez inferior a 100). Las imágenes se etiquetaron con cajas en
-Roboflow y se redimensionan a 640\,px para el entrenamiento y la inferencia.
-En inferencia no se aplica otro filtro de imagen: la ROI, el umbral de
-confianza (0,3) y el mínimo de fotogramas por track actúan después del
-detector.
+Para el dataset se extrajo de los videos un fotograma por segundo, más
+fotogramas adicionales ante cambios grandes de escena, y se descartaron los
+borrosos con un índice de nitidez. Las imágenes se etiquetaron con cajas en
+Roboflow \cite{roboflow} y se redimensionan a 640\,px.
 
-\subsection{Dataset y entrenamiento del modelo}
-El modelo evolucionó en tres versiones (Tabla~\ref{tab:modelos}). V3, un
-YOLO26 Nano con tres clases de severidad, detectó solo 32 de 64 baches en su
-evaluación en Roboflow, pero clasificó bien la severidad de 29 de esos 32 (90,6\,\%).
-Es decir, el problema principal era \emph{encontrar} baches, no clasificarlos.
-Por eso V4 se entrenó como detector de una sola clase (\texttt{pothole}) y la
-severidad se calcula aparte, con una regla geométrica. V4 usa YOLO26 Small
-\cite{ultralytics} preentrenado, con 386 imágenes etiquetadas en Roboflow
-\cite{roboflow}: 143 propias de calles de Encarnación y 243 seleccionadas de
-un dataset público. El dataset resultante se publicó en Roboflow Universe como
-\emph{fork} del original, con licencia CC BY 4.0 \cite{dataset2026}, y se
-dividió en 275 imágenes de entrenamiento (71\,\%), 74 de validación (19\,\%) y
-37 de test (10\,\%, con 70 baches). Se entrenó con imágenes de 640\,px, hasta 300 épocas y parada
-temprana con paciencia 90; la mejor época de validación fue la 281.
+\subsection{Dataset y entrenamiento}
+V3, un YOLO26 Nano con tres clases de severidad, detectó solo 32 de 64 baches
+en su evaluación, pero clasificó bien 29 de esos 32 (90,6\,\%): el problema era
+\emph{encontrar} baches, no clasificarlos. Por eso V4 es un detector de una sola
+clase (\texttt{pothole}) y la severidad se calcula aparte. V4 usa YOLO26 Small
+\cite{ultralytics} preentrenado, con 386 imágenes: 143 propias de Encarnación y
+243 de un dataset público. El dataset se publicó en Roboflow Universe como
+\emph{fork} del original (CC BY 4.0) \cite{dataset2026} y se dividió en 275
+imágenes de entrenamiento, 74 de validación y 37 de test (70 baches). Se entrenó
+hasta 300 épocas con paciencia 90; la mejor época fue la 281.
 
 \subsection{Seguimiento, severidad y georreferenciación}
-ByteTrack \cite{zhang2022} asigna un identificador a cada bache mientras está
-en cuadro. Se descartan las detecciones con centro en el 45\,\% superior de la
-imagen (región de interés, ROI) y los \emph{tracks} vistos en menos de 3
-fotogramas. Para cada track se elige el fotograma clave de mayor área dentro de
-la ROI. Su severidad se obtiene del área normalizada con corrección de
-perspectiva:
+ByteTrack \cite{zhang2022} sigue cada bache entre fotogramas. Se descartan las
+detecciones con centro en el 45\,\% superior de la imagen (ROI) y los
+\emph{tracks} con menos de 3 fotogramas. En el fotograma de mayor área se
+calcula el área normalizada con corrección de perspectiva:
 \begin{equation}
 A_{n} = \frac{A}{W H}\left(\frac{y_{r}-y_{h}}{\max(y-y_{h},\,d)}\right)^{\gamma},
 \end{equation}
 donde $A$ es el área de la caja, $W\times H$ el tamaño del fotograma, $y$ la
-fila normalizada del centro, $y_h=0{,}45$ el horizonte de la ROI, $y_r=0{,}7$
-la fila de referencia, $d=0{,}05$ y $\gamma=2$. Con la calibración actual del
-equipo, $A_n<0{,}001$ es leve, $A_n<0{,}008$ moderado y el resto crítico. Para
-calibrar, el personal etiqueta recortes en una vista interna del frontend y un
-comando recalcula la severidad de las observaciones guardadas sin reprocesar
-el video.
+fila normalizada del centro, $y_h=0{,}45$, $y_r=0{,}7$, $d=0{,}05$ y
+$\gamma=2$. Con la calibración del equipo, $A_n<0{,}001$ es leve,
+$A_n<0{,}008$ moderado y el resto crítico. Los umbrales se calibran etiquetando
+recortes en una vista interna y se aplican a la base sin reprocesar el video.
 
-La posición del vehículo se interpola linealmente en el GPX y el rumbo se
-estima con posiciones vecinas en el tiempo. El centro de la caja se proyecta
-sobre la calzada con un modelo de cámara estenopeica y suelo plano, hasta
-30\,m, y el desplazamiento resultante se suma a la posición del vehículo. Así
-se ubica el bache y no la antena GPS.
+La posición del vehículo se interpola en el GPX y el rumbo se estima con
+posiciones vecinas. El centro de la caja se proyecta sobre la calzada con un
+modelo de cámara estenopeica y suelo plano (hasta 30\,m), de modo que se ubica
+el bache y no el GPS.
 
 \subsection{Backend, API e interfaz}
-Las detecciones se importan a PostgreSQL/PostGIS \cite{postgis}. DBSCAN
-\cite{ester1996} (\texttt{ST\_ClusterDBSCAN}, radio 2,5\,m, proyección UTM~21S)
-agrupa las observaciones del mismo bache en distintos recorridos. Una API REST
-en Django \cite{django} expone los baches con severidad, confianza y foto de
-evidencia, y permite consultas por radio. El mapa web (React y Leaflet
-\cite{leaflet}) muestra los baches con color por severidad, permite elegir un
-punto y un radio de búsqueda y deja que los vecinos reporten falsos positivos o
-reparaciones. Cada reporte reduce la opacidad del marcador, y con 3 reportes de
-falso positivo o 1 de reparación el bache se oculta; los conteos se guardan en
-el servidor, de modo que todos los usuarios ven el mismo estado. Una vista de
-votos lista los baches reportados, incluidos los ocultos, y una vista interna
-permite al personal etiquetar recortes para calibrar la severidad.
+Las detecciones se importan a PostgreSQL/PostGIS, donde DBSCAN \cite{ester1996}
+(radio de 2,5\,m) agrupa las observaciones de un mismo bache. Una API REST en
+Django expone los baches con severidad, confianza y foto de evidencia, con
+consultas por radio. El mapa web (React y Leaflet) colorea los baches por
+severidad y permite reportar falsos positivos o reparaciones: cada reporte
+reduce la opacidad del marcador, y con 3 falsos positivos o 1 reparación el
+bache se oculta. Los conteos se guardan en el servidor, por lo que todos los
+usuarios ven el mismo estado.
 
 \section{Resultados y discusión}
 
 \subsection{Desempeño del detector}
-La Tabla~\ref{tab:modelos} compara las versiones del modelo. Para V4 se
-reportan el conjunto de test, evaluado en Roboflow, y la validación guardada en
-el checkpoint (mejor época). El F1 se calcula como $2PR/(P+R)$. Las métricas de
-validación son optimistas porque ese conjunto se usa para elegir la época; las
-de test son la referencia.
+La Tabla~\ref{tab:modelos} compara las versiones. Para V4 se reportan el test
+(Roboflow) y la validación del checkpoint; esta última es optimista porque se
+usa para elegir la época. V4 supera a V3 en 21,6 puntos de mAP@50, aunque cada
+uno se evaluó sobre su propio dataset.
 
 \begin{table}[t]
-\caption{Métricas de las versiones del detector}
+\caption{Métricas de las versiones del detector (\%)}
 \label{tab:modelos}
 \centering
 \setlength{\tabcolsep}{3.2pt}
@@ -180,24 +152,19 @@ de test son la referencia.
 Modelo (fuente) & mAP@50 & mAP@50-95 & P & R & F1 \\
 \midrule
 V2, 1 clase & 82,7 & --- & 86,4 & 75,5 & 80,6 \\
-V3, Nano, 3 clases (Roboflow) & 39,2 & 16,9 & 63,1 & 46,2 & 53,3 \\
+V3, Nano, 3 clases & 39,2 & 16,9 & 63,1 & 46,2 & 53,3 \\
 V4, Small, 1 clase (test) & 60,8 & 28,3 & 76,3 & 64,3 & 69,8 \\
-V4, Small, 1 clase (validación) & 69,9 & 36,7 & 88,4 & 66,1 & 75,6 \\
+V4, Small, 1 clase (valid.) & 69,9 & 36,7 & 88,4 & 66,1 & 75,6 \\
 \bottomrule
-\multicolumn{6}{@{}p{\columnwidth}@{}}{\footnotesize Valores en \%. F1 calculado
-con P y R. P y R de V4 en test, según su matriz de confusión
-(Tabla~\ref{tab:confusion}). Cada versión se evaluó sobre su propio dataset.}
+\multicolumn{6}{@{}p{\columnwidth}@{}}{\footnotesize F1 $=2PR/(P+R)$. Cada
+versión se evaluó sobre su propio dataset.}
 \end{tabular}
 \end{table}
 
-V4 supera a V3 en 21,6 puntos de mAP@50, aunque cada uno se evaluó sobre su
-propio dataset. Pasar a una sola clase concentra el
-aprendizaje en la localización, que era el punto débil de V3: V3 detectaba la
-mitad de los baches y V4 detecta casi dos de cada tres. La matriz de confusión
-de V4 en test (Tabla~\ref{tab:confusion}) muestra 45 baches detectados, 25 no
-detectados y 14 falsos positivos. Frente a la validación, el recall se mantiene
-(64,3\,\% contra 66,1\,\%), pero la precisión baja 12 puntos: en imágenes nuevas
-el modelo marca más falsos positivos, como grietas y parches.
+La matriz de confusión de V4 en test (Tabla~\ref{tab:confusion}) muestra 45
+baches detectados, 25 no detectados y 14 falsos positivos. Frente a la
+validación, el recall se mantiene, pero la precisión baja 12 puntos: en imágenes
+nuevas aparecen más falsos positivos, como grietas y parches.
 
 \begin{table}[t]
 \caption{Matriz de confusión de V4 en test (37 imágenes)}
@@ -213,13 +180,13 @@ Fondo (falso positivo) & 14 & --- \\
 \end{tabular}
 \end{table}
 
-La Fig.~\ref{fig:map} desglosa el mAP por tamaño de objeto según la convención
-COCO \cite{lin2014}. El modelo funciona bien con baches grandes (mAP@50 de
-75,3\,\%), peor con medianos (43,2\,\%) y no detecta ninguno chico. Esto
-importa en la práctica: un bache lejano se ve chico, así que el sistema solo lo
-detecta cuando el vehículo se acerca. El seguimiento compensa en parte, porque
-el mismo bache aparece en varios fotogramas.
-
+Según la Fig.~\ref{fig:map}, con la convención de tamaños de COCO
+\cite{lin2014}, el modelo funciona bien con baches grandes (mAP@50 de
+75,3\,\%), peor con medianos (43,2\,\%) y no detecta los chicos. Un bache lejano
+se ve chico, así que solo se detecta al acercarse; el seguimiento lo compensa en
+parte. La \emph{accuracy} no se reporta porque en detección de objetos no hay
+verdaderos negativos contables, y el RMSE aplicaría al error de posición, que
+requiere coordenadas de referencia medidas en campo.
 
 \begin{figure}[t]
 \centering
@@ -235,86 +202,44 @@ el mismo bache aparece en varios fotogramas.
 % \caption{Métricas de validación de V4 durante el entrenamiento.}
 % \end{figure}
 
-\subsection{Tiempo de inferencia}
-En un Intel Core i7-12700F, sin GPU, V4 procesa un fotograma en 51\,ms en
-promedio (unos 19\,fps) con entradas de 640\,px, incluyendo pre y
-posprocesamiento. Es suficiente para el procesamiento offline y no exige
-hardware especial. La API en la nube de Roboflow reporta 7,5\,ms.
+% Figura opcional (si sobra espacio): detección real con la línea de la ROI.
+% \begin{figure}[t]
+% \centering
+% \includegraphics[width=\columnwidth]{fig_ejemplo.jpg}
+% \caption{Detección en una calle de Encarnación (confianza 0,84). La línea
+% horizontal marca el límite de la ROI.}
+% \end{figure}
 
-\subsection{Prueba de campo en Encarnación}
-Se procesaron 403 fotogramas (uno por segundo) de cinco recorridos urbanos del
-7/11/2026 con su GPX (Tabla~\ref{tab:campo}). La Fig.~\ref{fig:ejemplo}
-muestra una detección típica.
+\subsection{Tiempo de inferencia y prueba de campo}
+En un Intel Core i7-12700F sin GPU, V4 procesa un fotograma en 51\,ms (unos
+19\,fps) con entradas de 640\,px, suficiente para el procesamiento offline; la
+API en la nube de Roboflow reporta 7,5\,ms.
 
-\begin{table}[t]
-\caption{Resultados de la prueba de campo}
-\label{tab:campo}
-\centering
-\begin{tabular}{@{}lr@{}}
-\toprule
-Indicador & Valor \\
-\midrule
-Fotogramas procesados & 403 \\
-Fotogramas con al menos una detección & 93 \\
-Detecciones ($\text{conf}\geq 0{,}3$) & 117 \\
-Detecciones en la ROI y georreferenciadas & 115 \\
-Baches consolidados (DBSCAN, 2,5\,m) & 89 \\
-Severidad de los consolidados (leve / moderado / crítico) & 61 / 28 / 0 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fig_ejemplo.jpg}
-\caption{Detección en una calle de Encarnación (confianza 0,84). La línea
-horizontal marca el límite de la ROI.}
-\label{fig:ejemplo}
-\end{figure}
-
-El 98\,\% de las detecciones quedó dentro de la ROI y todas obtuvieron una
-posición proyectada. DBSCAN redujo 115 observaciones a 89 baches, lo que
-confirma que el mismo bache se detecta en fotogramas sucesivos. La inspección
-visual mostró falsos positivos, sobre todo grietas y marcas chicas en el
-asfalto. Ningún bache resultó crítico: el mayor $A_n$ observado fue 0,0049,
-por debajo del umbral de 0,008; en este recorrido no se registraron baches con
-área suficiente para esa categoría. No se reporta precisión de campo porque esos fotogramas no tienen
-etiquetas de referencia, y parte de ellos puede haberse usado en el
-entrenamiento.
-
-\subsection{Métricas no reportadas}
-La \emph{accuracy} no se reporta para el detector porque en detección de
-objetos no existen verdaderos negativos contables: cualquier región sin bache
-del fondo lo sería. En su lugar se usan precisión, recall, F1 y mAP. El RMSE
-corresponde a variables continuas; en SPM su uso natural es el error de
-georreferenciación en metros, que requiere coordenadas de referencia medidas en
-campo y queda como trabajo futuro.
+En la prueba de campo se procesaron 403 fotogramas de cinco recorridos del
+7/11/2026 con su GPX. Hubo 117 detecciones ($\text{conf}\geq 0{,}3$), de las
+cuales 115 quedaron dentro de la ROI y se georreferenciaron; DBSCAN las
+consolidó en 89 baches (61 leves y 28 moderados). Ninguno resultó crítico: el
+mayor $A_n$ fue 0,0049, por debajo del umbral de 0,008. La inspección visual
+mostró falsos positivos en grietas y marcas pequeñas. No se reporta precisión de
+campo porque esos fotogramas no tienen etiquetas y parte de ellos pudo usarse en
+el entrenamiento.
 
 \section{Conclusiones y trabajo futuro}
 
-SPM demuestra que un pipeline de bajo costo, con una cámara común, un GPS de
+SPM demuestra que un pipeline de bajo costo, con una cámara común, el GPS de un
 teléfono y un detector que corre en CPU, puede relevar baches y publicarlos en
 un mapa georreferenciado. La lección principal fue separar la detección de la
-severidad: un detector de una clase superó en 21,6 puntos de mAP@50 al modelo
-de tres clases (cada uno en su propio dataset), y la severidad pasó a ser una regla geométrica configurable y
-explicable.
+severidad: un detector de una clase superó al modelo de tres clases, y la
+severidad pasó a ser una regla geométrica configurable y explicable.
 
-Las limitaciones son claras. El modelo no detecta baches chicos o lejanos; con
-un recall de 64,3\,\% en test deja pasar uno de cada tres baches, y su precisión
-de 76,3\,\% implica que uno de cada cuatro avisos es un falso positivo, que el
-feedback ciudadano del mapa ayuda a depurar. El dataset es chico (386
-imágenes, 37 de test) y los umbrales de severidad deben validarse con más
-baches clasificados. Tampoco se midió
-el error de georreferenciación, que depende de la precisión del GPS del
-teléfono y del supuesto de suelo plano.
-
-Como trabajo futuro se propone: (i) ampliar el dataset con recorridos propios,
-separando entrenamiento y prueba por recorrido; (ii) entrenar con mayor
-resolución o recortes para mejorar la detección de baches chicos; (iii)
-refinar los umbrales de severidad con más baches clasificados en campo;
-(iv) medir el error de posición (RMSE) contra coordenadas tomadas con GPS en
-baches reales; y (v) usar el feedback ciudadano del mapa para reentrenar el
-modelo.
+Como limitaciones, el modelo no detecta baches chicos o lejanos; con un recall
+de 64,3\,\% deja pasar uno de cada tres, y su precisión de 76,3\,\% implica
+que uno de cada cuatro avisos es falso, algo que el feedback ciudadano ayuda a
+depurar. El dataset es pequeño y no se midió el error de georreferenciación.
+Como trabajo futuro se propone ampliar el dataset con recorridos propios
+separados entre entrenamiento y test, entrenar con mayor resolución para los
+baches chicos, refinar los umbrales de severidad, medir el error de posición
+(RMSE) en campo y usar el feedback ciudadano para reentrenar el modelo.
 
 \begin{thebibliography}{00}
 \bibitem{chaubaches2026} Edición Prensa, ``Municipalidad presenta `Chau Baches' para reportar daños en la vía pública,'' \emph{Más Encarnación}, Encarnación, Paraguay, 7 jul. 2026. [En línea]. Disponible: \url{https://www.masencarnacion.com/articulo/municipalidad-presenta-chau-baches-para-reportar-danos-en-la-publica} [Accedido: 9 nov. 2026].
@@ -328,9 +253,6 @@ modelo.
 \bibitem{dataset2026} New Workspace, ``pothole Dataset,'' Roboflow Universe, nov. 2026. Licencia CC BY 4.0. [En línea]. Disponible: \url{https://universe.roboflow.com/lucas-benitez/pothole-vhmow-bygvr} [Accedido: 9 nov. 2026].
 \bibitem{zhang2022} Y. Zhang \emph{et al.}, ``ByteTrack: Multi-object tracking by associating every detection box,'' en \emph{Proc. European Conf. Computer Vision (ECCV)}, 2022, pp. 1--21.
 \bibitem{ester1996} M. Ester, H.-P. Kriegel, J. Sander y X. Xu, ``A density-based algorithm for discovering clusters in large spatial databases with noise,'' en \emph{Proc. 2nd Int. Conf. Knowledge Discovery and Data Mining (KDD)}, 1996, pp. 226--231.
-\bibitem{postgis} PostGIS Project Steering Committee, ``PostGIS,'' 2026. [En línea]. Disponible: \url{https://postgis.net}
-\bibitem{django} Django Software Foundation, ``Django,'' 2026. [En línea]. Disponible: \url{https://www.djangoproject.com}
-\bibitem{leaflet} V. Agafonkin, ``Leaflet,'' 2026. [En línea]. Disponible: \url{https://leafletjs.com}
 \bibitem{lin2014} T.-Y. Lin \emph{et al.}, ``Microsoft COCO: Common objects in context,'' en \emph{Proc. European Conf. Computer Vision (ECCV)}, 2014, pp. 740--755.
 \end{thebibliography}
 

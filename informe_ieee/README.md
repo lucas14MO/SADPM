@@ -21,12 +21,12 @@ El script también genera PNG de control que no hace falta subir.
 
 ## Antes de entregar
 
-1. **Ajustar a exactamente 3 páginas.** El texto se estimó para unas 3 páginas,
-   pero no se compiló en este entorno.
-   - Si sobra espacio: descomentar la figura de curvas de validación
-     (`fig_curvas_v4.pdf`, comentada en la sección de resultados).
-   - Si falta espacio, quitar en este orden: la foto de ejemplo
-     (`fig:ejemplo`) y la subsección "Métricas no reportadas" (resumida en una
-     frase).
+1. **Ajustar a exactamente 3 páginas.** La primera compilación dio 4 páginas;
+   el texto se redujo en consecuencia (cuerpo de ~1650 a ~1125 palabras, sin la
+   foto de ejemplo ni la tabla de la prueba de campo).
+   - Si sobra espacio: descomentar las figuras opcionales de la sección de
+     resultados (foto de ejemplo y curvas de validación).
+   - Si aún falta espacio: quitar la Fig. de mAP por tamaño y dejar sus valores
+     en el texto.
 2. Verificar en la nota de Más Encarnación la fecha de publicación citada
    (7/7/2026).
