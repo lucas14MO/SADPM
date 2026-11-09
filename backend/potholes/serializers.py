@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Pothole, PotholeFeedback
+from .models import Pothole, PotholeFeedback, PotholeObservation
 
 
 class PotholeSerializer(serializers.ModelSerializer):
@@ -50,3 +50,32 @@ class PotholeFeedbackSerializer(serializers.Serializer):
         choices=[item[0] for item in PotholeFeedback.FEEDBACK_TYPES]
     )
     client_token = serializers.UUIDField()
+
+
+class PotholeObservationClassificationSerializer(serializers.ModelSerializer):
+    session_key = serializers.CharField(source="session.session_key", read_only=True)
+    classified_by_username = serializers.CharField(
+        source="classified_by.username", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = PotholeObservation
+        fields = [
+            "id",
+            "session_key",
+            "track_id",
+            "severity",
+            "human_severity",
+            "area_norm",
+            "confidence_avg",
+            "frames_detected",
+            "timestamp",
+            "evidence_image",
+            "classified_by_username",
+            "classified_at",
+        ]
+        read_only_fields = [
+            "id", "session_key", "track_id", "severity", "area_norm",
+            "confidence_avg", "frames_detected", "timestamp", "evidence_image",
+            "classified_by_username", "classified_at",
+        ]

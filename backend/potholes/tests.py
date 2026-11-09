@@ -3,6 +3,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
+from django.contrib.gis.geos import Point
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
@@ -283,3 +285,97 @@ class SpatialDatabaseTests(TestCase):
         manual.refresh_from_db()
         self.assertFalse(manual.is_consolidated)
         self.assertTrue(Pothole.objects.filter(pk=manual.pk).exists())
+
+    def test_recalculate_severity_updates_observations_and_clusters_only(self):
+        session = CaptureSession.objects.create(
+            session_key="severity-calibration",
+            source_path="/tmp/severity-calibration",
+        )
+        observation = PotholeObservation.objects.create(
+            session=session,
+            track_id=1,
+            severity="leve",
+            confidence_avg=0.8,
+            confidence_max=0.9,
+            area_norm=0.02,
+            frames_detected=3,
+            timestamp="2026-10-26T12:00:00+00:00",
+            frame_key=10,
+            location=Point(-55.86, -27.33, srid=4326),
+        )
+        manual = Pothole.objects.create(
+            gravedad="leve", latitud=-27.34, longitud=-55.86, confianza=0.7
+        )
+
+        call_command(
+            "recalcular_severidad", light_threshold=0.01,
+            critical_threshold=0.05, verbosity=0,
+        )
+
+        observation.refresh_from_db()
+        cluster = Pothole.objects.get(is_consolidated=True)
+        self.assertEqual(observation.severity, "moderado")
+        self.assertEqual(cluster.gravedad, "moderado")
+
+        call_command(
+            "recalcular_severidad", light_threshold=0.001,
+            critical_threshold=0.005, dry_run=True, verbosity=0,
+        )
+        observation.refresh_from_db()
+        self.assertEqual(observation.severity, "moderado")
+
+        call_command(
+            "recalcular_severidad", light_threshold=0.001,
+            critical_threshold=0.005, verbosity=0,
+        )
+        observation.refresh_from_db()
+        cluster.refresh_from_db()
+        manual.refresh_from_db()
+        self.assertEqual(observation.severity, "critico")
+        self.assertEqual(cluster.gravedad, "critico")
+        self.assertEqual(manual.gravedad, "leve")
+
+    def test_classification_api_requires_staff_and_records_classifier(self):
+        session = CaptureSession.objects.create(
+            session_key="classification-test", source_path="/tmp/classification-test"
+        )
+        observation = PotholeObservation.objects.create(
+            session=session,
+            track_id=1,
+            severity="moderado",
+            confidence_avg=0.8,
+            confidence_max=0.9,
+            area_norm=0.02,
+            frames_detected=3,
+            timestamp="2026-10-26T12:00:00+00:00",
+            frame_key=10,
+            evidence_image="pothole_observations/crop.jpg",
+        )
+        endpoint = reverse("observacion-clasificacion-list")
+        anonymous = APIClient()
+        self.assertEqual(anonymous.get(endpoint).status_code, 403)
+
+        user_model = get_user_model()
+        regular_user = user_model.objects.create_user(username="regular")
+        regular_client = APIClient()
+        regular_client.force_authenticate(user=regular_user)
+        self.assertEqual(regular_client.get(endpoint).status_code, 403)
+
+        staff_user = user_model.objects.create_user(username="calibrator", is_staff=True)
+        staff_client = APIClient()
+        staff_client.force_authenticate(user=staff_user)
+        response = staff_client.get(endpoint)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["area_norm"], 0.02)
+
+        updated = staff_client.patch(
+            reverse("observacion-clasificacion-detail", args=[observation.pk]),
+            {"human_severity": "critico"},
+            format="json",
+        )
+        self.assertEqual(updated.status_code, 200)
+        observation.refresh_from_db()
+        self.assertEqual(observation.human_severity, "critico")
+        self.assertEqual(observation.classified_by, staff_user)
+        self.assertIsNotNone(observation.classified_at)

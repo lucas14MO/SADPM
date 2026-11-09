@@ -5,12 +5,18 @@ from django.contrib.gis.measure import D
 from django.db import connection, transaction
 from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status
+from django.utils import timezone
+from rest_framework import mixins, viewsets, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
-from .models import Pothole, PotholeFeedback
-from .serializers import PotholeFeedbackSerializer, PotholeSerializer
+from .models import Pothole, PotholeFeedback, PotholeObservation
+from .serializers import (
+    PotholeFeedbackSerializer,
+    PotholeObservationClassificationSerializer,
+    PotholeSerializer,
+)
 
 
 class PotholeViewSet(viewsets.ModelViewSet):
@@ -101,3 +107,25 @@ class PotholeViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class PotholeObservationClassificationViewSet(
+    mixins.ListModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = PotholeObservationClassificationSerializer
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [IsAdminUser]
+    http_method_names = ["get", "patch", "head", "options"]
+
+    def get_queryset(self) -> QuerySet[PotholeObservation]:
+        return (
+            PotholeObservation.objects.select_related("session", "classified_by")
+            .filter(area_norm__isnull=False, evidence_image__isnull=False)
+            .exclude(evidence_image="")
+            .order_by("human_severity", "id")
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(classified_by=self.request.user, classified_at=timezone.now())

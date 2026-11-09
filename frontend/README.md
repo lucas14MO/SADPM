@@ -1,8 +1,8 @@
 # SAD Pothole Map — Frontend
 
-Interfaz web del mapa de baches de Encarnación (Fase 8 de `fases.md`). Por ahora corre
-100% con datos de ejemplo; está armada para conectarse a la API Django/PostGIS (Fase 7)
-sin tener que tocar componentes de la UI.
+Interfaz web del mapa de baches de Encarnación y calibración manual de severidad.
+El mapa puede usar datos de ejemplo o la API Django/PostGIS; la pantalla de
+clasificación requiere el backend real y una cuenta Django con permisos staff.
 
 ## Stack
 
@@ -23,13 +23,14 @@ src/
   data/        Datos de ejemplo (mockPotholes.ts)
   services/    Capa de acceso a datos. La UI solo conoce PotholeService (interfaz);
                hoy resuelve a MockPotholeService, mañana a ApiPotholeService.
-  hooks/       usePotholes: carga + filtrado, desacoplado del componente que lo usa.
+  hooks/       usePotholes: carga espacial + filtrado por gravedad.
   utils/       Formato de fecha/confianza, colores y tamaños por gravedad, geo (haversine).
   components/
-    layout/    Header
-    map/       MapView (Leaflet), LocateControl (botón de geolocalización)
+    layout/    Header con navegación entre mapa y calibración
+    map/       MapView (Leaflet), selección de centro y radio, LocateControl
     filters/   SeverityFilter (chips leve/moderado/crítico = filtro + leyenda)
-    details/   PotholeDetailPanel (panel de info al hacer click en un bache)
+    details/   PotholeDetailPanel con visor de evidencia completa y feedback
+    calibration/ ClassificationPage: etiquetas humanas de recortes y CSV
     common/    Piezas de UI genéricas (ErrorBanner)
 ```
 
@@ -41,5 +42,8 @@ src/
    (`src/services/apiPotholeService.ts`), que ya espera el contrato de
    `/api/baches/?lat=&lng=&radio=&gravedad=` descrito en `fases.md` (Fase 7).
 
-Ningún componente de `components/` ni el hook `usePotholes` necesita cambiar: todos
-dependen de la interfaz `PotholeService`, no de su implementación.
+En el mapa, un clic fija el centro de consulta y el control numérico modifica el
+radio en metros. La vista Calibración consulta
+`/api/observaciones/clasificacion/`; inicia sesión con una cuenta staff en
+`http://127.0.0.1:8000/admin/` antes de usarla. Aplica en el backend la migración
+pendiente antes de habilitar este flujo.

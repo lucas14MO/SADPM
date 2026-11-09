@@ -201,8 +201,53 @@ Los reportes pertenecen al bache consolidado. Al reconstruir clusters espaciales
 se reasocian al nuevo grupo con mayor solapamiento de observaciones; en caso de
 división se asignan a un único grupo para evitar duplicar votos.
 
+### 7. Clasificar observaciones para calibración
+
+Requiere una sesión Django autenticada y un usuario con `is_staff=True`. Inicia
+sesión en `/admin/` y conserva las cookies de sesión y CSRF al llamar a la API.
+
+**Listar muestras**
+
+- **Método**: `GET`
+- **Endpoint**: `/api/observaciones/clasificacion/`
+- **Respuesta**: observaciones con recorte y `area_norm`, con las muestras sin
+  etiqueta humana al principio.
+
+Cada elemento incluye `id`, `session_key`, `track_id`, `severity` calculada,
+`human_severity`, `area_norm`, confianza, cantidad de frames, timestamp,
+`evidence_image`, usuario clasificador y fecha de clasificación.
+
+**Guardar etiqueta humana**
+
+- **Método**: `PATCH`
+- **Endpoint**: `/api/observaciones/clasificacion/{id}/`
+- **Header**: `X-CSRFToken` obtenido de la cookie `csrftoken`.
+
+```json
+{
+  "human_severity": "moderado"
+}
+```
+
+`human_severity` acepta `leve`, `moderado` o `critico`. Esta etiqueta no cambia
+`severity`; la pantalla permite exportar a CSV el ID de observación, sesión,
+track, `area_norm` y clase humana.
+
+### 8. Recalcular severidad
+
+El comando `python manage.py recalcular_severidad --light-threshold 0.001
+--critical-threshold 0.005 --dry-run` muestra cuántas observaciones existentes
+se actualizarían. Al quitar `--dry-run`, actualiza las severidades desde
+`area_norm` y reconstruye los consolidados, sin volver a procesar videos. Las
+observaciones con área nula y los baches manuales quedan fuera.
+
 ---
 
 ## Configuración CORS
 
-El servidor tiene habilitado **CORS** para cualquier origen en desarrollo (`CORS_ALLOW_ALL_ORIGINS = True`), permitiendo peticiones desde aplicaciones Frontend React alojadas en `http://localhost:3000`, `http://localhost:5173`, u otros puertos.
+El servidor tiene habilitado **CORS** para cualquier origen en desarrollo
+(`CORS_ALLOW_ALL_ORIGINS = True`) y credenciales para la sesión interna. Los
+orígenes frontend confiables para CSRF se configuran en
+`DJANGO_CSRF_TRUSTED_ORIGINS` (default: puertos `5173` y `5174` en `localhost` y
+`127.0.0.1`). En producción restringe CORS y configura únicamente los orígenes
+reales.

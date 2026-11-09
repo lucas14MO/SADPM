@@ -106,6 +106,40 @@ La API conserva el contrato de baches existente. Las consultas de radio utilizan
 consolidados se administran por Django; no se añade un endpoint de ingesta en
 esta fase.
 
+## Clasificación y recalibración de severidad
+
+Aplica las migraciones y crea una cuenta interna con permisos de staff:
+
+```bash
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+En el frontend conectado a esta API, inicia sesión en `/admin/` con esa cuenta y
+abre la pestaña **Calibración**. La pantalla permite etiquetar observaciones con
+recorte y `area_norm`; guarda la etiqueta humana separada de la severidad
+calculada y descarga las etiquetas guardadas como CSV. El listado y la
+actualización requieren una sesión Django autenticada y un usuario `is_staff`.
+
+Para cambiar los umbrales de observaciones ya importadas, sin reejecutar videos:
+
+```bash
+python manage.py recalcular_severidad \
+  --light-threshold 0.001 \
+  --critical-threshold 0.005 \
+  --dry-run
+python manage.py recalcular_severidad \
+  --light-threshold 0.001 \
+  --critical-threshold 0.005
+```
+
+El umbral leve debe ser positivo y menor que el crítico. El comando actualiza
+observaciones con `area_norm`, reconstruye los baches consolidados y conserva
+feedback; deja intactos los baches manuales y observaciones sin área. `--eps-meters`
+permite cambiar el radio de agrupación (default 2.5 m). En desarrollo, los
+orígenes frontend confiables para CSRF se configuran con
+`DJANGO_CSRF_TRUSTED_ORIGINS`.
+
 El endpoint `POST /api/baches/{id}/feedback/` recibe `feedback_type`
 (`false_positive` o `repaired`) y un UUID anónimo del cliente. El mismo token no
 puede votar más de una vez por tipo y bache. Tres reportes de falso positivo o
