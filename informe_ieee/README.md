@@ -21,12 +21,10 @@ El script también genera PNG de control que no hace falta subir.
 
 ## Antes de entregar
 
-1. **Ajustar a exactamente 3 páginas.** La primera compilación dio 4 páginas;
-   el texto se redujo en consecuencia (cuerpo de ~1650 a ~1125 palabras, sin la
-   foto de ejemplo ni la tabla de la prueba de campo).
-   - Versión actual: 3 páginas en Overleaf, con todas las figuras.
-     resultados (foto de ejemplo y curvas de validación).
-   - Si aún falta espacio: quitar la Fig. de mAP por tamaño y dejar sus valores
-     en el texto.
+1. **Verificar que sean exactamente 3 páginas.** Con el texto reducido (~1125
+   palabras de cuerpo) el informe compiló en 3 páginas con la tercera casi
+   vacía; por eso se reincorporaron la foto de detección y las curvas de
+   validación. Si con ellas pasa a 4 páginas, quitar primero las curvas
+   (`fig:curvas` y su párrafo) y después la foto (`fig:ejemplo`).
 2. Verificar en la nota de Más Encarnación la fecha de publicación citada
    (7/7/2026).
