@@ -1,6 +1,5 @@
 % Informe científico SADPM — plantilla IEEE de conferencia (dos columnas).
 % Compilar con pdfLaTeX (por ejemplo, en Overleaf). Las figuras están en figuras/.
-% Pendientes marcados con TODO.
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
 \usepackage[utf8]{inputenc}
@@ -18,10 +17,10 @@
 
 \title{SAD Pothole Map: detección, georreferenciación y mapeo automático de baches con YOLO26 en Encarnación, Paraguay}
 
-% TODO: agregar el nombre de la universidad si la cátedra lo requiere.
 \author{
 \IEEEauthorblockN{Lucas Benitez y Emanuel Báez}
 \IEEEauthorblockA{Ingeniería Informática, 4.\textsuperscript{o} curso\\
+Universidad Católica Nuestra Señora de la Asunción, Campus Itapúa\\
 Encarnación, Paraguay\\
 lucabenitezs23@gmail.com, obaezemanuel@gmail.com}
 }
@@ -90,9 +89,10 @@ captura.
 \subsection{Captura de datos}
 La captura se realizó desde un automóvil con dos integrantes del equipo: uno
 conducía y el otro, como acompañante, operaba una laptop con el software de
-captura y la cámara conectada. El software graba video 1080p a 30\,fps y
-guarda la hora UTC de cada fotograma. En paralelo, una aplicación de iOS
-registró el recorrido y lo exportó en formato GPX. Ambas fuentes se sincronizan
+captura y una cámara DJI Osmo Pocket 3 conectada. El software graba video 1080p
+a 30\,fps y guarda la hora UTC de cada fotograma. En paralelo, la aplicación
+Open GPX Tracker 1.10.1 para iOS registró el recorrido con un punto por
+segundo (mediana) y lo exportó en formato GPX. Ambas fuentes se sincronizan
 por la hora UTC, sin hardware dedicado. Antes de grabar, con el vehículo
 detenido, se calibró la cámara sobre el asfalto; la calibración registra la altura de la cámara (1,35\,m), su
 inclinación (\ang{1.462}) y su campo de visión horizontal (\ang{118.15}).

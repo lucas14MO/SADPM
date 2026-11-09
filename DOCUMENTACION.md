@@ -8,7 +8,7 @@ tiempos (timestamps) del video con el GPS. Para el plan completo ver [fases.md](
 | Fase | Qué es | Estado |
 | --- | --- | --- |
 | 1 | Captura de video + timestamps por fotograma | ✅ Hecho (`capture/capture.py`) |
-| 1 | Captura del GPS (`.gpx`) | ✅ Externo: aplicación de iOS que exporta el recorrido en GPX (sección 11); **no hay código** |
+| 1 | Captura del GPS (`.gpx`) | ✅ Externo: Open GPX Tracker 1.10.1 (iOS) exporta el recorrido en GPX (sección 11); **no hay código** |
 | 2 | Dataset y etiquetado | ✅ V4: 386 imágenes (143 propias, 243 de un *fork* público), split 71/19/10, CC BY 4.0 |
 | 3 | Entrenamiento propio | ✅ V4 YOLO26 Small monoclass (Roboflow iteración 9, AGPL-3.0). Test: P 76,3 %, R 64,3 %, F1 69,8 %, mAP@50 60,8 % (ver [IA_Models.md](weights/IA_Models.md)) |
 | 4 | ROI de asfalto y severidad por área relativa | ✅ Implementado; umbrales calibrados (`0.001`/`0.008`) con la pestaña Calibración; ROI y perspectiva provisionales |
@@ -358,23 +358,24 @@ La captura de campo se realizó en Encarnación con el siguiente procedimiento:
 - **Vehículo y equipo humano:** un automóvil con dos integrantes del equipo; uno
   conducía y el otro, en el asiento del acompañante, operaba el sistema de
   captura.
-- **Equipo de captura:** cámara conectada a una laptop con `capture.py` en
-  ejecución. El operador iniciaba y detenía cada sesión desde la laptop.
+- **Equipo de captura:** cámara DJI Osmo Pocket 3 conectada a una laptop con
+  `capture.py` en ejecución. El operador iniciaba y detenía cada sesión desde la
+  laptop. La tasa medida en `frames.csv` fue de ~30,5 fps.
 - **Calibración previa:** antes de grabar, con el vehículo detenido, se calibró
   la cámara sobre el asfalto con `calibrate_camera.py`. El resultado está en
   `capture/camera_calibration.json`: altura de 1,35 m, inclinación de 1,462° y
   campo de visión horizontal de 118,15°.
-- **GPS:** el recorrido se registró con una aplicación de iOS que lo exporta en
-  formato GPX (`capture/gpx/07-nov-2026-1750.gpx`: 418 puntos, de 20:40:30 a
-  20:49:50 UTC). La calibración registra un desplazamiento nulo entre la cámara
+- **GPS:** el recorrido se registró con la aplicación **Open GPX Tracker 1.10.1**
+  para iOS, que lo exporta en formato GPX (`capture/gpx/07-nov-2026-1750.gpx`:
+  418 puntos, de 20:40:30 a 20:49:50 UTC). El intervalo entre puntos tiene una
+  mediana de 1 s (media de 1,34 s; el mayor hueco fue de 17 s). La calibración registra un desplazamiento nulo entre la cámara
   y el teléfono (`forward_offset_m` y `right_offset_m` en 0).
 - **Resultado:** cinco sesiones de video (de 20:39 a 20:49 UTC). La primera,
   `sesion_20261107_173925`, comenzó antes que el registro GPS y quedó sin
   coordenadas; por eso el registro GPS debe iniciarse antes que la grabación.
 
-Datos que conviene completar en la ficha de campo: nombre y versión de la
-aplicación de iOS, frecuencia de registro, modelo de cámara y posición del
-teléfono dentro del vehículo.
+Dato que conviene registrar en próximas campañas: posición del teléfono y de la
+cámara dentro del vehículo.
 
 ### Recomendaciones generales
 
