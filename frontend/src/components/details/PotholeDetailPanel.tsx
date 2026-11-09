@@ -10,6 +10,8 @@ interface PotholeDetailPanelProps {
 
 export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: PotholeDetailPanelProps) {
   const meta = SEVERITY_META[pothole.severity];
+  const totalVotes = (pothole.falsePositiveReports ?? 0) + (pothole.repairedReports ?? 0);
+  const isVisible = pothole.isVisible !== false;
   const [submitting, setSubmitting] = useState<FeedbackType | null>(null);
   const [submitted, setSubmitted] = useState<FeedbackType[]>([]);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
@@ -104,10 +106,11 @@ export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: Pot
 
       <div className="mt-4 border-t border-slate-200 pt-3">
         <p className="mb-2 text-xs font-semibold uppercase text-slate-500">Validación ciudadana</p>
+        <p className="mb-2 text-xs text-slate-600">Votos totales: {totalVotes}</p>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            disabled={submitting !== null || submitted.includes('false_positive')}
+            disabled={!isVisible || submitting !== null || submitted.includes('false_positive')}
             onClick={() => void sendFeedback('false_positive')}
             className="min-h-10 rounded-md border border-slate-300 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -116,7 +119,7 @@ export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: Pot
           </button>
           <button
             type="button"
-            disabled={submitting !== null || submitted.includes('repaired')}
+            disabled={!isVisible || submitting !== null || submitted.includes('repaired')}
             onClick={() => void sendFeedback('repaired')}
             className="min-h-10 rounded-md border border-slate-300 px-2 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >

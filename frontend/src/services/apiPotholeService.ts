@@ -39,6 +39,22 @@ function clientToken(): string {
  * Espera un endpoint del estilo /api/baches/?lat=...&lng=...&radio=...
  */
 export class ApiPotholeService implements PotholeService {
+  private mapPothole(item: ApiPothole): Pothole {
+    return {
+      id: String(item.id),
+      lat: item.latitud,
+      lng: item.longitud,
+      severity: item.gravedad,
+      confidence: item.confianza,
+      detectedAt: item.timestamp_deteccion,
+      imageUrl: item.url_imagen ?? undefined,
+      areaNorm: item.area_norm ?? undefined,
+      falsePositiveReports: item.false_positive_reports,
+      repairedReports: item.repaired_reports,
+      isVisible: item.is_visible,
+    };
+  }
+
   async getPotholes(params: PotholeQueryParams = {}): Promise<Pothole[]> {
     const query = new URLSearchParams();
     if (params.lat !== undefined) query.set('lat', String(params.lat));
@@ -53,19 +69,14 @@ export class ApiPotholeService implements PotholeService {
       throw new Error(`Error al consultar baches: ${response.status}`);
     }
     const data: ApiPothole[] = await response.json();
-    return data.map((item) => ({
-      id: String(item.id),
-      lat: item.latitud,
-      lng: item.longitud,
-      severity: item.gravedad,
-      confidence: item.confianza,
-      detectedAt: item.timestamp_deteccion,
-      imageUrl: item.url_imagen ?? undefined,
-      areaNorm: item.area_norm ?? undefined,
-      falsePositiveReports: item.false_positive_reports,
-      repairedReports: item.repaired_reports,
-      isVisible: item.is_visible,
-    }));
+    return data.map((item) => this.mapPothole(item));
+  }
+
+  async getVotedPotholes(): Promise<Pothole[]> {
+    const response = await fetch(`${API_BASE_URL}/baches/votados/`);
+    if (!response.ok) throw new Error(`Error al consultar baches votados: ${response.status}`);
+    const data: ApiPothole[] = await response.json();
+    return data.map((item) => this.mapPothole(item));
   }
 
   async submitFeedback(id: string, type: FeedbackType): Promise<PotholeFeedbackResult> {

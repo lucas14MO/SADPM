@@ -1,10 +1,21 @@
-import { Circle, CircleMarker, MapContainer, TileLayer, Tooltip, useMapEvents } from 'react-leaflet';
+import { useEffect } from 'react';
+import { Circle, CircleMarker, MapContainer, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import LocateControl from './LocateControl';
 import { SEVERITY_META } from '../../utils/severity';
 import type { Pothole } from '../../types/pothole';
 
 const ENCARNACION_CENTER: [number, number] = [-27.3306, -55.8657];
 const DEFAULT_ZOOM = 14;
+const DEFAULT_MARKER_OPACITY = 0.85;
+const MIN_MARKER_OPACITY = 0.25;
+const OPACITY_DROP_PER_REPORT = 0.2;
+
+function markerOpacity(voteCount: number): number {
+  return Math.max(
+    MIN_MARKER_OPACITY,
+    DEFAULT_MARKER_OPACITY - Math.max(0, voteCount) * OPACITY_DROP_PER_REPORT,
+  );
+}
 
 interface MapViewProps {
   potholes: Pothole[];
@@ -13,12 +24,21 @@ interface MapViewProps {
   radiusMeters: number;
   onSelectPothole: (pothole: Pothole) => void;
   onSelectCenter: (center: [number, number]) => void;
+  focusedPothole: Pothole | null;
 }
 
 function CenterPicker({ onSelectCenter }: Pick<MapViewProps, 'onSelectCenter'>) {
   useMapEvents({
     click: ({ latlng }) => onSelectCenter([latlng.lat, latlng.lng]),
   });
+  return null;
+}
+
+function FocusPothole({ pothole }: Pick<MapViewProps, 'focusedPothole'>) {
+  const map = useMap();
+  useEffect(() => {
+    if (pothole) map.setView([pothole.lat, pothole.lng], Math.max(map.getZoom(), 16), { animate: true });
+  }, [map, pothole?.id, pothole?.lat, pothole?.lng]);
   return null;
 }
 
@@ -29,6 +49,7 @@ export default function MapView({
   radiusMeters,
   onSelectPothole,
   onSelectCenter,
+  focusedPothole,
 }: MapViewProps) {
   return (
     <MapContainer center={ENCARNACION_CENTER} zoom={DEFAULT_ZOOM} className="h-full w-full">
@@ -39,6 +60,7 @@ export default function MapView({
 
       <LocateControl />
       <CenterPicker onSelectCenter={onSelectCenter} />
+      <FocusPothole pothole={focusedPothole} />
 
       <Circle
         center={searchCenter}
@@ -67,7 +89,9 @@ export default function MapView({
               color: isSelected ? '#0f172a' : meta.color,
               weight: isSelected ? 3 : 1.5,
               fillColor: meta.color,
-              fillOpacity: 0.85,
+              fillOpacity: markerOpacity(
+                (pothole.falsePositiveReports ?? 0) + (pothole.repairedReports ?? 0),
+              ),
             }}
             eventHandlers={{ click: () => onSelectPothole(pothole) }}
           >

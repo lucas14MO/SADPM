@@ -53,8 +53,10 @@ sintéticas, pero aún no se calibró ni validó con una sesión visual completa
    reparado/desactualizado. El objetivo backend es ocultar o marcar inválido un
    bache con al menos 3 reportes de falso positivo, o un reporte de
    reparado/desactualizado. Backend y UI ya incluyen persistencia/endpoint y
-   controles idempotentes por UUID de navegador; la migración aún requiere
-   aplicarse en el entorno PostGIS y el flujo debe probarse integrado.
+   controles idempotentes por UUID de navegador. Los conteos se calculan desde
+   feedback persistido, se refrescan en los clientes y modulan la opacidad; el
+   modal **Votos** lista también los baches ocultos. El flujo de UI debe probarse
+   integrado.
 
 ## 2. Cómo se usa
 
@@ -300,6 +302,15 @@ La API acepta feedback idempotente por bache/tipo/UUID; 3 reportes de falso
 positivo o uno de reparación ocultan el bache. La migración `0003` está aplicada
 en la base PostGIS del entorno de desarrollo; los tests backend usan una base
 temporal.
+
+Los contadores públicos se derivan de los votos guardados, así que los clientes
+comparten el mismo conteo. El mapa usa el total de reportes para bajar
+progresivamente la opacidad y refresca al volver a la pestaña o cada 15 segundos.
+El botón **Votos** abre el listado de baches reportados, incluidos los que ya no
+son visibles en el mapa. Para simular votos desde desarrollo, agrega registros
+en el inline **Feedbacks** de un bache en Django Admin; el conteo y la
+visibilidad se recalculan al guardar. Ver [API_DOCUMENTATION.md](backend/API_DOCUMENTATION.md)
+y [backend/README.md](backend/README.md) para los endpoints y el procedimiento.
 
 | Campo de la API | De dónde saldrá |
 | --- | --- |

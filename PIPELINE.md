@@ -160,4 +160,10 @@ que las nuevas observaciones usen la misma calibración.
 ### Ocultar baches por feedback (backend)
 
 - Un bache se oculta con **3 reportes de falso positivo** o **1 de reparado**.
-- Fijo en código: `backend/potholes/views.py:89`. No hay opción para cambiarlo.
+- Política aplicada por el endpoint de feedback del backend.
+- Cada reporte de falso positivo o reparado reduce la opacidad del marcador; el
+  frontend combina ambos conteos persistidos y actualiza al volver al foco o
+  cada 15 segundos.
+- El modal **Votos** consulta `GET /api/baches/votados/` y permite abrir también
+  baches ocultos. Para simular feedback, agrega registros desde el inline de
+  Feedbacks en Django Admin.

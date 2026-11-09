@@ -93,8 +93,9 @@
   - Filtro interactivo por radio de búsqueda centrado en la ubicación del usuario o en un punto seleccionado.
   - Popup con imagen del keyframe y caja de detección dibujada, gravedad, confianza, coordenadas y fecha.
   - Acciones para reportar falso positivo o bache reparado/desactualizado; mostrar estado de envío y contadores, limitando votos repetidos según la política backend.
+  - Opacidad de marcadores según el total persistido de votos y modal de acceso rápido a baches con feedback, incluidos los ocultos.
   - Reflejar que los baches invalidados o desactualizados dejan de aparecer en el mapa.
-- **Estado**: payload API, endpoint y acciones de UI implementados en código; falta aplicar/verificar migración PostGIS y compilar/probar frontend en entorno con Node.
+- **Estado**: API de consulta y feedback, refresco de conteos entre clientes, opacidad dinámica y modal de baches votados implementados; falta compilar/probar la UI tras estos cambios.
 
 ## Fase 9 — Integración End-to-End, Pruebas y Presentación
 - **Objetivo**: Conectar todo el pipeline desde la entrada de video hasta la renderización en el mapa.

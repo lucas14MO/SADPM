@@ -11,5 +11,6 @@ import type {
  */
 export interface PotholeService {
   getPotholes(params?: PotholeQueryParams): Promise<Pothole[]>;
+  getVotedPotholes(): Promise<Pothole[]>;
   submitFeedback(id: string, type: FeedbackType): Promise<PotholeFeedbackResult>;
 }

@@ -43,6 +43,10 @@
 - [x] Mostrar en el detalle evidencia, severidad y confianza.
 - [x] Añadir acciones de feedback con estados de envío/error y bloqueo repetido en la vista actual; backend aplica idempotencia por UUID.
 - [x] Recargar el mapa y cerrar el detalle cuando backend oculta el bache.
+- [x] Reducir progresivamente la opacidad del marcador según el total de reportes ciudadanos; los baches reparados/desactualizados se ocultan según la política existente.
+- [x] Derivar los contadores de feedback persistido para compartir conteos entre navegadores; refrescar el mapa al recuperar foco y cada 15 segundos.
+- [x] Añadir modal de acceso rápido a baches con reportes de falso positivo o reparación, incluidos los ocultos.
+- [x] Simular votos creando registros de feedback desde el inline de Django Admin.
 - [x] Compilar el frontend (`npm run build` OK).
 - [ ] Probar la UI en el navegador con datos reales (marcadores, filtro, foto, feedback).
 

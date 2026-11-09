@@ -69,7 +69,7 @@ Cada objeto bache retornado o enviado posee la siguiente estructura JSON:
 | `url_imagen_externa` | String (URL) | URL remota opcional de la imagen. |
 | `url_imagen` | String (URL) | URL absoluta pública resolver para la visualización en el mapa/modal. |
 | `false_positive_reports` | Integer | Reportes ciudadanos de falso positivo. |
-| `repaired_reports` | Integer | Reportes de reparación/desactualización. |
+| `repaired_reports` | Integer | Reportes ciudadanos de reparado/desactualizado. |
 | `is_visible` | Boolean | Si el bache sigue visible en consultas públicas. |
 
 ---
@@ -201,7 +201,20 @@ Los reportes pertenecen al bache consolidado. Al reconstruir clusters espaciales
 se reasocian al nuevo grupo con mayor solapamiento de observaciones; en caso de
 división se asignan a un único grupo para evitar duplicar votos.
 
-### 7. Clasificar observaciones para calibración
+### 7. Consultar baches con votos
+
+- **Método**: `GET`
+- **Endpoint**: `/api/baches/votados/`
+- **Autenticación**: pública
+
+Devuelve baches que tienen al menos un reporte de falso positivo o reparación,
+incluidos los que ya se ocultaron del mapa público. Los campos
+`false_positive_reports` y `repaired_reports` se calculan desde los registros de
+feedback persistidos; estos conteos son la fuente compartida entre navegadores.
+El mapa consulta de nuevo al recuperar el foco y cada 15 segundos para reflejar
+votos recientes en la opacidad del marcador.
+
+### 8. Clasificar observaciones para calibración
 
 Requiere una sesión Django autenticada y un usuario con `is_staff=True`. Inicia
 sesión en `/admin/` y conserva las cookies de sesión y CSRF al llamar a la API.

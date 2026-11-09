@@ -189,6 +189,12 @@ uno de reparación ocultan el bache de consultas públicas. Los reportes se
 reasocian a los clusters reconstruidos según el mayor solapamiento de sus
 observaciones.
 
+Los conteos que devuelve la API se calculan desde los registros de feedback y
+se comparten entre clientes. `GET /api/baches/votados/` lista los baches con
+reportes, incluidos los ocultos. Para simular votos en desarrollo, abre un bache
+en Django Admin y añade registros en la tabla inline “Feedbacks”; el UUID se
+prellena y los contadores/visibilidad se recalculan al guardar.
+
 ## Respaldo
 
 Crear un respaldo SQL comprimido:

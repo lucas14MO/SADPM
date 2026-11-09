@@ -52,6 +52,16 @@ export function usePotholes(
     };
   }, [lat, lng, radiusMeters, activeSeverities, requestKey]);
 
+  useEffect(() => {
+    const refresh = () => setReloadToken((token) => token + 1);
+    const interval = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
   const filtered = useMemo(
     () => potholes.filter((pothole) => activeSeverities.includes(pothole.severity)),
     [potholes, activeSeverities],

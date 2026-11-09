@@ -3,7 +3,7 @@ import math
 from django.contrib.gis.geos import Point
 from django.contrib.gis.measure import D
 from django.db import connection, transaction
-from django.db.models import QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, viewsets, status
@@ -32,8 +32,19 @@ class PotholeViewSet(viewsets.ModelViewSet):
     queryset = Pothole.objects.all()
     serializer_class = PotholeSerializer
 
+    @staticmethod
+    def with_feedback_counts(queryset):
+        return queryset.annotate(
+            feedback_false_positive_count=Count(
+                "feedback", filter=Q(feedback__feedback_type=PotholeFeedback.FALSE_POSITIVE)
+            ),
+            feedback_repaired_count=Count(
+                "feedback", filter=Q(feedback__feedback_type=PotholeFeedback.REPAIRED)
+            ),
+        )
+
     def get_queryset(self) -> QuerySet[Pothole]:  # type: ignore[override]
-        queryset = Pothole.objects.filter(is_visible=True)
+        queryset = self.with_feedback_counts(Pothole.objects.filter(is_visible=True))
 
         # Filtrado opcional por gravedad
         gravedad = self.request.GET.get('gravedad', None)
@@ -70,6 +81,18 @@ class PotholeViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    @action(detail=False, methods=["get"], url_path="votados", permission_classes=[AllowAny])
+    def voted(self, request):
+        """Baches con feedback ciudadano, incluidos los ocultos por el umbral."""
+        queryset = self.with_feedback_counts(Pothole.objects.all()).filter(
+            Q(feedback_false_positive_count__gt=0) | Q(feedback_repaired_count__gt=0)
+        ).order_by("-updated_at", "-id")
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        return Response(self.get_serializer(queryset, many=True).data)
+
     @action(detail=True, methods=["post"], url_path="feedback", permission_classes=[AllowAny])
     def feedback(self, request, pk=None):
         serializer = PotholeFeedbackSerializer(data=request.data)
@@ -85,12 +108,15 @@ class PotholeViewSet(viewsets.ModelViewSet):
                 feedback_type=serializer.validated_data["feedback_type"],
                 client_token=serializer.validated_data["client_token"],
             )
-            pothole.false_positive_reports = PotholeFeedback.objects.filter(
-                pothole=pothole, feedback_type=PotholeFeedback.FALSE_POSITIVE
-            ).count()
-            pothole.repaired_reports = PotholeFeedback.objects.filter(
-                pothole=pothole, feedback_type=PotholeFeedback.REPAIRED
-            ).count()
+            # Los registros persistidos son la fuente del conteo compartido.
+            counts = pothole.feedback.aggregate(
+                false_positive=Count(
+                    "id", filter=Q(feedback_type=PotholeFeedback.FALSE_POSITIVE)
+                ),
+                repaired=Count("id", filter=Q(feedback_type=PotholeFeedback.REPAIRED)),
+            )
+            pothole.false_positive_reports = counts["false_positive"]
+            pothole.repaired_reports = counts["repaired"]
             pothole.is_visible = (
                 pothole.false_positive_reports < 3 and pothole.repaired_reports == 0
             )

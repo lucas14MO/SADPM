@@ -29,7 +29,7 @@ src/
     layout/    Header con navegación entre mapa y calibración
     map/       MapView (Leaflet), selección de centro y radio, LocateControl
     filters/   SeverityFilter (chips leve/moderado/crítico = filtro + leyenda)
-    details/   PotholeDetailPanel con visor de evidencia completa y feedback
+    details/   Panel de detalle, modal de baches con votos y visor de evidencia
     calibration/ ClassificationPage: etiquetas humanas de recortes y CSV
     common/    Piezas de UI genéricas (ErrorBanner)
 ```

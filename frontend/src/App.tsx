@@ -3,6 +3,7 @@ import Header from './components/layout/Header';
 import MapView from './components/map/MapView';
 import SeverityFilter from './components/filters/SeverityFilter';
 import PotholeDetailPanel from './components/details/PotholeDetailPanel';
+import VotedPotholesModal from './components/details/VotedPotholesModal';
 import ClassificationPage from './components/calibration/ClassificationPage';
 import ErrorBanner from './components/common/ErrorBanner';
 import { usePotholes } from './hooks/usePotholes';
@@ -14,6 +15,7 @@ function App() {
   const [view, setView] = useState<'map' | 'calibration'>('map');
   const [activeSeverities, setActiveSeverities] = useState<Severity[]>([...SEVERITY_ORDER]);
   const [selectedPothole, setSelectedPothole] = useState<Pothole | null>(null);
+  const [showVotedPotholes, setShowVotedPotholes] = useState(false);
   const [searchCenter, setSearchCenter] = useState<[number, number]>([-27.3306, -55.8657]);
   const [radiusMeters, setRadiusMeters] = useState(1000);
   const [radiusInput, setRadiusInput] = useState('1000');
@@ -60,7 +62,22 @@ function App() {
         isLoading={isLoading}
         view={view}
         onViewChange={setView}
+        onShowVoted={() => setShowVotedPotholes(true)}
       />
+
+      {showVotedPotholes && (
+        <VotedPotholesModal
+          onClose={() => setShowVotedPotholes(false)}
+          onSelect={(pothole) => {
+            setView('map');
+            setSearchCenter([pothole.lat, pothole.lng]);
+            setRadiusMeters(1000);
+            setRadiusInput('1000');
+            setSelectedPothole(pothole);
+            setShowVotedPotholes(false);
+          }}
+        />
+      )}
 
       <div className="relative flex-1">
         {view === 'calibration' ? (
@@ -70,6 +87,7 @@ function App() {
         <MapView
           potholes={potholes}
           selectedId={selectedPothole?.id ?? null}
+          focusedPothole={selectedPothole}
           searchCenter={searchCenter}
           radiusMeters={radiusMeters}
           onSelectPothole={setSelectedPothole}

@@ -5,6 +5,16 @@ from .models import Pothole, PotholeFeedback, PotholeObservation
 class PotholeSerializer(serializers.ModelSerializer):
     coordenadas = serializers.ReadOnlyField()
     url_imagen = serializers.ReadOnlyField()
+    false_positive_reports = serializers.SerializerMethodField()
+    repaired_reports = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_false_positive_reports(instance):
+        return getattr(instance, "feedback_false_positive_count", instance.false_positive_reports)
+
+    @staticmethod
+    def get_repaired_reports(instance):
+        return getattr(instance, "feedback_repaired_count", instance.repaired_reports)
 
     class Meta:
         model = Pothole

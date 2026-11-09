@@ -14,10 +14,21 @@ const hiddenPotholes = new Set<string>();
 
 /** Sirve los datos de ejemplo, simulando una llamada de red real. */
 export class MockPotholeService implements PotholeService {
+  private withCounts() {
+    return MOCK_POTHOLES.map((pothole) => {
+      const counts = feedbackCounts.get(pothole.id);
+      return {
+        ...pothole,
+        falsePositiveReports: counts?.falsePositive ?? pothole.falsePositiveReports ?? 0,
+        repairedReports: counts?.repaired ?? pothole.repairedReports ?? 0,
+      };
+    });
+  }
+
   async getPotholes(params: PotholeQueryParams = {}): Promise<Pothole[]> {
     await new Promise((resolve) => setTimeout(resolve, SIMULATED_LATENCY_MS));
 
-    let result = [...MOCK_POTHOLES];
+    let result = this.withCounts();
     result = result.filter((pothole) => !hiddenPotholes.has(pothole.id));
 
     if (params.severities && params.severities.length > 0) {
@@ -33,6 +44,13 @@ export class MockPotholeService implements PotholeService {
     }
 
     return result;
+  }
+
+  async getVotedPotholes(): Promise<Pothole[]> {
+    await new Promise((resolve) => setTimeout(resolve, SIMULATED_LATENCY_MS));
+    return this.withCounts().filter(
+      (pothole) => (pothole.falsePositiveReports ?? 0) + (pothole.repairedReports ?? 0) > 0,
+    );
   }
 
   async submitFeedback(id: string, type: FeedbackType): Promise<PotholeFeedbackResult> {

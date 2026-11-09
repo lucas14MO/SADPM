@@ -3,9 +3,10 @@ interface HeaderProps {
   isLoading: boolean;
   view: 'map' | 'calibration';
   onViewChange: (view: 'map' | 'calibration') => void;
+  onShowVoted: () => void;
 }
 
-export default function Header({ visibleCount, isLoading, view, onViewChange }: HeaderProps) {
+export default function Header({ visibleCount, isLoading, view, onViewChange, onShowVoted }: HeaderProps) {
   return (
     <header className="z-20 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
       <div>
@@ -13,6 +14,13 @@ export default function Header({ visibleCount, isLoading, view, onViewChange }: 
         <p className="text-xs text-slate-500 sm:text-sm">Estado de la calzada en Encarnación</p>
       </div>
       <nav aria-label="Secciones" className="flex rounded-md border border-slate-200 p-1">
+        <button
+          type="button"
+          onClick={onShowVoted}
+          className="rounded px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
+        >
+          Votos
+        </button>
         <button
           type="button"
           aria-pressed={view === 'map'}
