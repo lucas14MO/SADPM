@@ -40,6 +40,21 @@ deténlo con `Ctrl+C`. `backend/.env` debe tener `POSTGRES_HOST=127.0.0.1` y
 `DJANGO_PORT` en `.env` no es `8000`, reemplaza el puerto del último comando por
 ese valor.
 
+### Alternativa: Django en Docker (Windows o sin GDAL local)
+
+GeoDjango necesita GDAL/GEOS/PROJ nativos, difíciles de instalar en Windows. El
+servicio `django` de Compose (perfil opcional `django`) los trae en la imagen,
+aplica las migraciones al arrancar y guarda la evidencia en el volumen
+`media_data`:
+
+```bash
+docker compose --profile django up -d --build postgis django
+docker compose ps
+```
+
+No ejecutes a la vez `runserver` en el host: ambos publican `DJANGO_PORT`.
+Sin `--profile django`, `docker compose up -d postgis` funciona como antes.
+
 Para levantar también el frontend en Docker:
 
 ```bash
@@ -47,8 +62,8 @@ sudo docker compose up -d --build --remove-orphans postgis frontend
 ```
 
 Vite queda en `http://127.0.0.1:5173` y consulta Django en
-`http://127.0.0.1:${DJANGO_PORT:-8000}/api`. El servicio `django` ya no forma
-parte de Compose. El volumen `postgis_data` conserva la base; no ejecutes
+`http://127.0.0.1:${DJANGO_PORT:-8000}/api`. El servicio `django` solo se
+levanta con el perfil `django` (ver arriba). El volumen `postgis_data` conserva la base; no ejecutes
 `docker compose down -v`.
 
 Django ejecutado en el host guarda nuevas imágenes en `backend/media/`. Si la
@@ -69,17 +84,35 @@ registros manuales/no gestionados.
 El procesador offline de `capture/` produce `processed_potholes.json` y recortes.
 Importa una carpeta de sesión así:
 
+Con Django en el host:
+
 ```bash
-sudo docker compose run --rm \
-  -v "$(realpath ../capture/recordings/sesion_AAAAMMDD_HHMMSS):/data/session:ro" \
-  django python manage.py import_processed_potholes /data/session
-sudo docker compose run --rm \
-  -v "$(realpath ../capture/recordings/sesion_AAAAMMDD_HHMMSS):/data/session:ro" \
-  django python manage.py import_processed_potholes /data/session \
+python manage.py import_processed_potholes ../capture/recordings/sesion_AAAAMMDD_HHMMSS
+python manage.py import_processed_potholes ../capture/recordings/sesion_AAAAMMDD_HHMMSS \
   --eps-meters 2.5
 ```
 
-Sustituye `sesion_AAAAMMDD_HHMMSS` por el directorio real de la sesión.
+Con Django en Docker (perfil `django`), montando la sesión con **su mismo nombre**:
+
+```bash
+SESION=sesion_AAAAMMDD_HHMMSS
+sudo docker compose run --rm \
+  -v "$(realpath ../capture/recordings/$SESION):/data/$SESION:ro" \
+  django python manage.py import_processed_potholes /data/$SESION
+```
+
+En PowerShell:
+
+```powershell
+$SESION = "sesion_AAAAMMDD_HHMMSS"
+docker compose run --rm -v "${PWD}\..\capture\recordings\${SESION}:/data/${SESION}:ro" `
+  django python manage.py import_processed_potholes /data/$SESION
+```
+
+Sustituye `sesion_AAAAMMDD_HHMMSS` por el directorio real de la sesión. El nombre
+de la carpeta forma parte de la clave de sesión: si la misma sesión se importa
+desde carpetas con nombres distintos (por ejemplo, montándola como
+`/data/session`), se registra dos veces.
 
 La importación es idempotente por nombre/inicio de sesión y `track_id`. Conserva
 observaciones originales, actualiza esa sesión y recalcula los baches consolidados

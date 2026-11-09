@@ -16,6 +16,33 @@ services:
       timeout: 5s
       retries: 12
 
+  # Django en contenedor (incluye GDAL/GEOS/PROJ). Opcional: se activa con
+  # `docker compose --profile django up -d`. Útil en Windows o sin GDAL local.
+  # No levantar junto con `runserver` en el host: ambos usan DJANGO_PORT.
+  django:
+    profiles: ["django"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sadpm}
+      POSTGRES_USER: ${POSTGRES_USER:-sadpm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sadpm-local}
+      POSTGRES_HOST: postgis
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-development-only-change-me}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+    command: ["sh", "-c", "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"]
+    ports:
+      - "127.0.0.1:${DJANGO_PORT:-8000}:8000"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      postgis:
+        condition: service_healthy
+
   frontend:
     build:
       context: ../frontend
