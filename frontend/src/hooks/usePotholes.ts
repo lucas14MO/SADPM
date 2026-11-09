@@ -9,34 +9,48 @@ interface UsePotholesResult {
   reload: () => void;
 }
 
-/** Carga los baches una vez y filtra por gravedad en el cliente. */
-export function usePotholes(activeSeverities: Severity[]): UsePotholesResult {
+interface SpatialQuery {
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
+
+/** Carga los baches del radio seleccionado y filtra por gravedad. */
+export function usePotholes(
+  activeSeverities: Severity[],
+  spatialQuery: SpatialQuery,
+): UsePotholesResult {
+  const { lat, lng, radiusMeters } = spatialQuery;
   const [potholes, setPotholes] = useState<Pothole[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<{ key: string; message: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [completedRequestKey, setCompletedRequestKey] = useState<string | null>(null);
+  const requestKey = JSON.stringify([lat, lng, radiusMeters, activeSeverities, reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
 
     potholeService
-      .getPotholes()
+      .getPotholes({ lat, lng, radiusMeters, severities: activeSeverities })
       .then((data) => {
         if (!cancelled) setPotholes(data);
       })
       .catch(() => {
-        if (!cancelled) setError('No se pudieron cargar los baches. Intentá de nuevo.');
+        if (!cancelled) {
+          setRequestError({
+            key: requestKey,
+            message: 'No se pudieron cargar los baches. Intentá de nuevo.',
+          });
+        }
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setCompletedRequestKey(requestKey);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [lat, lng, radiusMeters, activeSeverities, requestKey]);
 
   const filtered = useMemo(
     () => potholes.filter((pothole) => activeSeverities.includes(pothole.severity)),
@@ -45,8 +59,8 @@ export function usePotholes(activeSeverities: Severity[]): UsePotholesResult {
 
   return {
     potholes: filtered,
-    isLoading,
-    error,
+    isLoading: completedRequestKey !== requestKey,
+    error: requestError?.key === requestKey ? requestError.message : null,
     reload: () => setReloadToken((token) => token + 1),
   };
 }

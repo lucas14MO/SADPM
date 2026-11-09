@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SEVERITY_META, formatConfidence, formatDate } from '../../utils/severity';
 import type { FeedbackType, Pothole } from '../../types/pothole';
 
@@ -14,6 +14,17 @@ export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: Pot
   const [submitted, setSubmitted] = useState<FeedbackType[]>([]);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [feedbackNotice, setFeedbackNotice] = useState<string | null>(null);
+  const [imageExpanded, setImageExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!imageExpanded) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setImageExpanded(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [imageExpanded]);
 
   async function sendFeedback(type: FeedbackType) {
     setSubmitting(type);
@@ -49,13 +60,20 @@ export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: Pot
         </button>
       </div>
 
-      <div className="mb-3 flex h-36 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
+      <div className="mb-3 flex h-44 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-slate-400">
         {pothole.imageUrl ? (
-          <img
-            src={pothole.imageUrl}
-            alt="Evidencia del bache con caja de detección"
-            className="h-full w-full rounded-lg object-cover"
-          />
+          <button
+            type="button"
+            onClick={() => setImageExpanded(true)}
+            aria-label="Ampliar imagen de evidencia"
+            className="flex h-full w-full cursor-zoom-in items-center justify-center"
+          >
+            <img
+              src={pothole.imageUrl}
+              alt="Evidencia del bache con caja de detección"
+              className="max-h-full max-w-full object-contain"
+            />
+          </button>
         ) : (
           <span className="text-sm">Sin imagen disponible</span>
         )}
@@ -109,6 +127,31 @@ export default function PotholeDetailPanel({ pothole, onClose, onFeedback }: Pot
         {feedbackError && <p role="alert" className="mt-2 text-xs text-red-700">{feedbackError}</p>}
         {feedbackNotice && <p role="status" className="mt-2 text-xs text-green-700">{feedbackNotice}</p>}
       </div>
+
+      {imageExpanded && pothole.imageUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagen completa de evidencia"
+          onClick={() => setImageExpanded(false)}
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/90 p-4"
+        >
+          <button
+            type="button"
+            onClick={() => setImageExpanded(false)}
+            aria-label="Cerrar imagen ampliada"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl text-white hover:bg-white/20"
+          >
+            ×
+          </button>
+          <img
+            src={pothole.imageUrl}
+            alt="Evidencia completa del bache con caja de detección"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[92vh] max-w-[96vw] object-contain"
+          />
+        </div>
+      )}
     </div>
   );
 }
