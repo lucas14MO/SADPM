@@ -46,6 +46,15 @@ baches pequeños (mAP de 0\,\%).
 detección de baches, YOLO, visión por computadora, georreferenciación, Paraguay
 \end{IEEEkeywords}
 
+% La figura a dos columnas se declara aquí para que quede arriba de la página 2
+% (LaTeX no ubica figuras a dos columnas en la página donde se declaran).
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=\textwidth]{fig_pipeline.pdf}
+\caption{Arquitectura de SPM: de la captura con cámara y GPS al mapa web.}
+\label{fig:pipeline}
+\end{figure*}
+
 \section{Introducción y contexto}
 
 El deterioro de la calzada es un problema persistente en las ciudades del
@@ -71,13 +80,6 @@ observaciones repetidas y validación ciudadana en un mapa web.
 
 La Fig.~\ref{fig:pipeline} resume el pipeline. El procesamiento de visión se
 ejecuta \emph{offline}, sobre el video ya grabado.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=\textwidth]{fig_pipeline.pdf}
-\caption{Arquitectura de SPM: de la captura con cámara y GPS al mapa web.}
-\label{fig:pipeline}
-\end{figure*}
 
 \subsection{Captura y preprocesamiento}
 La captura se realizó desde un automóvil: un integrante conducía y el otro, como
@@ -142,7 +144,7 @@ La Tabla~\ref{tab:modelos} compara las versiones. Para V4 se reportan el test
 usa para elegir la época. V4 supera a V3 en 21,6 puntos de mAP@50, aunque cada
 uno se evaluó sobre su propio dataset.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \caption{Métricas de las versiones del detector (\%)}
 \label{tab:modelos}
 \centering
@@ -166,7 +168,7 @@ baches detectados, 25 no detectados y 14 falsos positivos. Frente a la
 validación, el recall se mantiene, pero la precisión baja 12 puntos: en imágenes
 nuevas aparecen más falsos positivos, como grietas y parches.
 
-\begin{table}[t]
+\begin{table}[!htbp]
 \caption{Matriz de confusión de V4 en test (37 imágenes)}
 \label{tab:confusion}
 \centering
@@ -188,22 +190,22 @@ parte. La \emph{accuracy} no se reporta porque en detección de objetos no hay
 verdaderos negativos contables, y el RMSE aplicaría al error de posición, que
 requiere coordenadas de referencia medidas en campo.
 
-\begin{figure}[t]
+\begin{figure}[!htbp]
 \centering
-\includegraphics[width=\columnwidth]{fig_map_tamano.pdf}
+\includegraphics[width=0.85\columnwidth]{fig_map_tamano.pdf}
 \caption{mAP de V4 por tamaño de objeto (evaluación de Roboflow).}
 \label{fig:map}
 \end{figure}
 
 % Figura opcional (si sobra espacio): curvas de validación de V4.
-% \begin{figure}[t]
+% \begin{figure}[!htbp]
 % \centering
 % \includegraphics[width=\columnwidth]{fig_curvas_v4.pdf}
 % \caption{Métricas de validación de V4 durante el entrenamiento.}
 % \end{figure}
 
 % Figura opcional (si sobra espacio): detección real con la línea de la ROI.
-% \begin{figure}[t]
+% \begin{figure}[!htbp]
 % \centering
 % \includegraphics[width=\columnwidth]{fig_ejemplo.jpg}
 % \caption{Detección en una calle de Encarnación (confianza 0,84). La línea
