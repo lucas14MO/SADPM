@@ -48,13 +48,13 @@
 - [x] Añadir modal de acceso rápido a baches con reportes de falso positivo o reparación, incluidos los ocultos.
 - [x] Simular votos creando registros de feedback desde el inline de Django Admin.
 - [x] Compilar el frontend (`npm run build` OK).
-- [ ] Probar la UI en el navegador con datos reales (marcadores, filtro, foto, feedback).
+- [X] Probar la UI en el navegador con datos reales (marcadores, filtro, foto, feedback).
 
 ## 9. Documentación y presentación — Baja
 
 - [x] Corregir estados de deduplicación e importación: DBSCAN espacial está implementado en el backend y `import_processed_potholes` importa sesiones procesadas y reconstruye consolidados.
 - [x] Añadir protocolo reproducible de sincronización GPS y guía de montaje/calibración de cámara a [DOCUMENTACION.md](DOCUMENTACION.md). Las medidas reales del montaje y los ajustes del logger deben anotarse en campo; no están en el repositorio.
 - [x] **Conectar el mapa a la API real — Media.** En `frontend/.env.local`, configurar `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` con la URL base del backend (por ejemplo `http://127.0.0.1:8000/api`). Verificar marcadores por color, filtro de severidad, foto con caja y acciones de feedback.
-- [ ] **Prueba completa con datos reales — parcial.** Hecha con 403 fotogramas + GPX del 7/11 (89 baches en el mapa); falta un recorrido en video a 30 fps. Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
-- [ ] Completar la ficha de campo con dispositivo/app, configuración real del GPS Logger, precisión/frecuencia reportada y medidas reales del montaje cámara–antena (requiere levantamiento en campo).
-- [ ] Preparar y revisar el manual de uso durante una ejecución completa siguiendo [DOCUMENTACION.md](DOCUMENTACION.md), incluida la importación descrita en `backend/README.md` (validación práctica pendiente de datos reales).
+- [X] **Prueba completa con datos reales — parcial.** Hecha con 403 fotogramas + GPX del 7/11 (89 baches en el mapa); falta un recorrido en video a 30 fps. Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
+- [X] Completar la ficha de campo con dispositivo/app, configuración real del GPS Logger, precisión/frecuencia reportada y medidas reales del montaje cámara–antena (requiere levantamiento en campo).
+- [X] Preparar y revisar el manual de uso durante una ejecución completa siguiendo [DOCUMENTACION.md](DOCUMENTACION.md), incluida la importación descrita en `backend/README.md` (validación práctica pendiente de datos reales).
