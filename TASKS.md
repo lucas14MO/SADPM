@@ -25,13 +25,10 @@
 - [x] Registrar la licencia reportada del modelo (AGPL-3.0).
 - [x] Registrar los datos reportados de V4 monoclass (YOLO26 Small; 386 imágenes, 143 propias y 243 públicas seleccionadas) sin inferir métricas o licencia.
 - [x] Verificar los checkpoints contra Roboflow (fechas internas coinciden: V3 = iteración 4, V4 = iteración 9) y guardar los SHA-256 en [IA_Models.md](weights/IA_Models.md).
-- [ ] Confirmar si la licencia AGPL-3.0 cubre también el dataset.
+- [X] Confirmar si la licencia AGPL-3.0 cubre también el dataset.
 - [x] Añadir el mAP@50-95 (16,9%) y documentar la matriz de confusión con sus etiquetas y conteos en [IA_Models.md](weights/IA_Models.md).
 - [x] Registrar métricas de V4: mAP por tamaño (Roboflow), P/R/mAP de validación del checkpoint, pérdidas y latencia local en CPU.
 - [x] Matriz de confusión de V4 en test (Roboflow, 37 imágenes): P 76,3 %, R 64,3 %, F1 69,8 % en [IA_Models.md](weights/IA_Models.md).
-- [ ] Indicar el umbral de confianza de la evaluación de test y citar el dataset público de Roboflow del que se hizo el *fork*.
-- [ ] Aclarar el F1 de V3: el registrado (52,6 %) no coincide con el calculado con su P y R (53,3 %).
-- [ ] Cuando haya videos propios, etiquetar fotogramas en Roboflow o CVAT y, si hay tiempo, reentrenar. Separar train/valid/test por recorrido para evitar fuga de fotogramas similares.
 
 ## 7. Backend: feedback y purga lógica — Media
 

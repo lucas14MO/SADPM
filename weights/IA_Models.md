@@ -36,8 +36,9 @@ el modelo de la iteración 9.
 | --- | --- | --- |
 | Imágenes | 386 (143 propias + 243 seleccionadas de un dataset público) | Reportado por el equipo |
 | Origen de las imágenes públicas | *Fork* de un dataset público de Roboflow | Reportado por el equipo |
-| Conjunto de test | 37 imágenes (70 baches etiquetados) | Roboflow (evaluación del modelo) |
-| Split train/valid | No informado | — |
+| Conjunto de test | 10% (37 imágenes) | Roboflow (evaluación del modelo) |
+| Conjunto valid| 19% (74 imágenes) | Roboflow (evaluación del modelo) |
+| Conjunto train| 71% (275 imágenes) | Roboflow (evaluación del modelo) |
 | Épocas configuradas | 300 (`patience` 90) | Checkpoint |
 | Mejor época (por mAP@50-95 de validación) | 281 | Checkpoint |
 | Tamaño de entrada / batch | 640 px / 31 | Checkpoint |
@@ -46,6 +47,27 @@ el modelo de la iteración 9.
 
 Falta el nombre y la URL del dataset público original (para citarlo y
 verificar su licencia) y el split train/valid.
+
+```
+Cite This Project
+License
+CC BY 4.0
+
+If you use this dataset in a research paper, please cite it using the following BibTeX:
+
+@misc{ pothole-vhmow-bygvr_dataset,
+  title = { pothole Dataset },
+  type = { Open Source Dataset },
+  author = { New Workspace },
+  howpublished = { \url{ https://universe.roboflow.com/lucas-benitez/pothole-vhmow-bygvr } },
+  url = { https://universe.roboflow.com/lucas-benitez/pothole-vhmow-bygvr },
+  journal = { Roboflow Universe },
+  publisher = { Roboflow },
+  year = { 2026 },
+  month = { nov },
+  note = { visited on 2026-11-09 },
+}
+```
 
 ### Métricas
 
