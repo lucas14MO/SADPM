@@ -14,6 +14,7 @@ from spm_capture.offline import (
     Observation,
     SeverityConfig,
     TrackSummary,
+    _context_window,
     interpolate_gps_position,
     load_frame_timestamps,
     process_session,
@@ -265,6 +266,17 @@ class OfflinePipelineTests(unittest.TestCase):
                                 severity_config=SeverityConfig(roi_horizon_ratio=0.0))
             raw = json.loads(output_path.read_text(encoding="utf-8"))[0]
             self.assertEqual(raw["location_method"], "gps_vehicle")
+
+
+    def test_evidence_window_adds_context_and_stays_inside_frame(self) -> None:
+        # Caja chica centrada: la ventana crece al mínimo pedido alrededor del centro.
+        self.assertEqual(_context_window(100, 140, 320, 1920), (0, 320))
+        self.assertEqual(_context_window(900, 940, 320, 1920), (760, 1080))
+        # Pegada al borde derecho: se desplaza en lugar de recortarse.
+        self.assertEqual(_context_window(1900, 1920, 320, 1920), (1600, 1920))
+        # Nunca más chica que la caja ni más grande que el fotograma.
+        self.assertEqual(_context_window(10, 500, 320, 1920), (10, 500))
+        self.assertEqual(_context_window(0, 50, 320, 200), (0, 200))
 
 
 if __name__ == "__main__":

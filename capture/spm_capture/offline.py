@@ -307,12 +307,30 @@ def load_frame_timestamps(path: Path) -> dict[int, datetime]:
     return timestamps
 
 
-def _crop(frame: Any, box: tuple[int, int, int, int], margin: float = 0.15) -> Any:
+EVIDENCE_MIN_SIZE = (320, 240)  # (ancho, alto) mínimo del recorte de evidencia
+EVIDENCE_CONTEXT_SCALE = 3.0  # el recorte abarca al menos 3× la caja en cada eje
+
+
+def _context_window(start: int, end: int, size: int, limit: int) -> tuple[int, int]:
+    """Ventana de ``size`` px centrada en [start, end), desplazada para caber en [0, limit)."""
+    size = min(max(size, end - start), limit)
+    begin = (start + end) // 2 - size // 2
+    begin = min(max(0, begin), limit - size)
+    return begin, begin + size
+
+
+def _crop(frame: Any, box: tuple[int, int, int, int]) -> Any:
+    """Recorte con contexto alrededor de la caja para que la evidencia sea revisable."""
     x1, y1, x2, y2 = box
     height, width = frame.shape[:2]
-    margin_x, margin_y = int((x2 - x1) * margin), int((y2 - y1) * margin)
-    return frame[max(0, y1 - margin_y):min(height, y2 + margin_y),
-                 max(0, x1 - margin_x):min(width, x2 + margin_x)].copy()
+    min_width, min_height = EVIDENCE_MIN_SIZE
+    left, right = _context_window(
+        x1, x2, max(min_width, int((x2 - x1) * EVIDENCE_CONTEXT_SCALE)), width
+    )
+    top, bottom = _context_window(
+        y1, y2, max(min_height, int((y2 - y1) * EVIDENCE_CONTEXT_SCALE)), height
+    )
+    return frame[top:bottom, left:right].copy()
 
 
 def _annotated_crop(frame: Any, box: tuple[int, int, int, int]) -> Any:
