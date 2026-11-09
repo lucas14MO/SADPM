@@ -79,13 +79,16 @@ Mientras se graba (tecla **R**), además de `video.mp4`, `frames.csv` y
 
 `frame` en `detections.csv` es el mismo índice que en `frames.csv` y `video.mp4`.
 
-**Modelo**: por defecto se descarga en `models/` un YOLO11n público
-([tahaUgan/pothole-yolo11n](https://huggingface.co/tahaUgan/pothole-yolo11n),
-CC-BY-4.0) como modelo provisional hasta entrenar el propio (Fase 3). Para usar
-otro: `--model ruta/al/best.pt`.
+**Modelo**: por defecto usa el modelo propio V4
+(`../weights/weights_v4_monoclass.pt`, YOLO26 Small, clase única `pothole`), el
+mismo del procesamiento offline. Para usar otro: `--model ruta/al/best.pt`.
 
-**Rendimiento**: en CPU (sin GPU) la detección corre a ~10–13 fps en 1080p;
-los videos de la sesión se escriben a esos fps, no a los 30 de la cámara.
+**Rendimiento**: la detección en vivo corre en el mismo bucle que la grabación,
+así que el video de la sesión se escribe a los fps que alcance la detección, no
+a los 30 de la cámara. V4 tarda ~51 ms por fotograma en CPU (i7-12700F,
+`imgsz` 640) sin contar captura ni dibujo; con `--imgsz 480` va más rápido. Para
+los recorridos que se procesarán con `process_video.py`, grabar con
+`capture.py` (30 fps, sin detección).
 
 ## Procesamiento offline (Fase 5)
 

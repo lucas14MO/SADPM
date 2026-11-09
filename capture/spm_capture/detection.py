@@ -14,7 +14,6 @@ asigna un ID estable a cada bache mientras permanece en el campo de visión.
 from __future__ import annotations
 
 import csv
-import urllib.request
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,9 +22,11 @@ import cv2
 
 from .recorder import AsyncVideoWriter
 
-# Modelo público provisional (YOLO11n, CC-BY-4.0) hasta entrenar el propio en la Fase 3.
-DEFAULT_MODEL_URL = "https://huggingface.co/tahaUgan/pothole-yolo11n/resolve/main/pothole2v.pt"
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "pothole-yolo11n.pt"
+# Modelo propio V4 (YOLO26 Small, clase única ``pothole``), el mismo que usa el
+# procesamiento offline (``process_video.py``). Ver weights/IA_Models.md.
+DEFAULT_MODEL_PATH = (
+    Path(__file__).resolve().parents[2] / "weights" / "weights_v4_monoclass.pt"
+)
 
 # Etiquetas mostradas en pantalla (sin tildes: las fuentes de OpenCV no las soportan).
 LABELS = {"pothole": "Bache", "sewage-manhole": "Tapa"}
@@ -37,17 +38,11 @@ PALETTE = [
 ]
 
 
-def ensure_model(path: Path = DEFAULT_MODEL_PATH, url: str = DEFAULT_MODEL_URL) -> Path:
-    """Descarga los pesos del modelo por defecto si todavía no están en disco."""
+def ensure_model(path: Path = DEFAULT_MODEL_PATH) -> Path:
+    """Verifica que existan los pesos del modelo."""
     path = Path(path)
-    if not path.exists():
-        if path != DEFAULT_MODEL_PATH:
-            raise FileNotFoundError(f"No existe el modelo {path}")
-        print(f"Descargando modelo de baches en {path} ...")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".part")
-        urllib.request.urlretrieve(url, tmp)
-        tmp.replace(path)
+    if not path.is_file():
+        raise FileNotFoundError(f"No existe el modelo {path}")
     return path
 
 
