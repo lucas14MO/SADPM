@@ -58,3 +58,12 @@
 - [X] **Prueba completa con datos reales — parcial.** Hecha con 403 fotogramas + GPX del 7/11 (89 baches en el mapa); falta un recorrido en video a 30 fps. Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
 - [X] Completar la ficha de campo con dispositivo/app, configuración real del GPS Logger, precisión/frecuencia reportada y medidas reales del montaje cámara–antena (requiere levantamiento en campo).
 - [X] Preparar y revisar el manual de uso durante una ejecución completa siguiendo [DOCUMENTACION.md](DOCUMENTACION.md), incluida la importación descrita en `backend/README.md` (validación práctica pendiente de datos reales).
+
+
+
+
+/home/lucas/stuff/python/IA/SADPM/capture/recordings/sesion_20261107_174028/sesion_20261107_174028_f000614.jpg
+
+/home/lucas/stuff/python/IA/SADPM/capture/recordings/sesion_20261107_174444/sesion_20261107_174444_f001479.jpg
+
+./.venv/bin/python -c "import cv2,sys; from pathlib import Path; sys.path.insert(0,'capture'); from process_video import process_frame_for_test; src=Path('/home/lucas/stuff/python/IA/SADPM/capture/recordings/sesion_20261107_174444/sesion_20261107_174444_f001479.jpg'); frame=cv2.imread(str(src)); assert frame is not None, f'No se pudo leer {src}'; annotated=process_frame_for_test(frame, model_path=Path('weights/weights_v4_monoclass.pt'), confidence=0.2, image_size=640); out=Path('test/frame_anotado5.jpg'); assert cv2.imwrite(str(out),annotated), f'No se pudo guardar {out}'; print(f'Guardada: {out.resolve()}')"

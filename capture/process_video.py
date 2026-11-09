@@ -5,8 +5,40 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from spm_capture.offline import SeverityConfig, process_session
+
+
+def process_frame_for_test(
+    frame: Any,
+    model_path: Path | None = None,
+    confidence: float = 0.3,
+    image_size: int = 640,
+) -> Any:
+    """Detecta objetos en un frame y devuelve una copia anotada, sin tracking."""
+    if frame is None or not hasattr(frame, "size") or frame.size == 0:
+        raise ValueError("El frame debe ser una imagen no vacía de OpenCV.")
+
+    if model_path is None:
+        model_path = Path(__file__).resolve().parents[1] / "weights" / "weights_v4_monoclass.pt"
+    model_path = Path(model_path)
+    if not model_path.is_file():
+        raise FileNotFoundError(f"No existe el modelo {model_path}")
+
+    try:
+        from ultralytics import YOLO
+    except ImportError as exc:
+        raise RuntimeError("Falta ultralytics. Instala las dependencias de capture/.") from exc
+
+    model = YOLO(str(model_path))
+    result = model.predict(
+        source=frame,
+        conf=confidence,
+        imgsz=image_size,
+        verbose=False,
+    )[0]
+    return result.plot()
 
 
 def parse_args() -> argparse.Namespace:
