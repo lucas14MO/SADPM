@@ -24,9 +24,12 @@
 - [x] Registrar URL/identificador, iteración de entrenamiento, versión de dataset, tipo y latencia Cloud API de Roboflow en [IA_Models.md](weights/IA_Models.md).
 - [x] Registrar la licencia reportada del modelo (AGPL-3.0).
 - [x] Registrar los datos reportados de V4 monoclass (YOLO26 Small; 386 imágenes, 143 propias y 243 públicas seleccionadas) sin inferir métricas o licencia.
-- [ ] Confirmar si la licencia cubre también dataset/pesos, conseguir el checkpoint de Roboflow o verificar `weights/weights.pt` contra él, y guardar el checksum.
+- [x] Verificar los checkpoints contra Roboflow (fechas internas coinciden: V3 = iteración 4, V4 = iteración 9) y guardar los SHA-256 en [IA_Models.md](weights/IA_Models.md).
+- [ ] Confirmar si la licencia AGPL-3.0 cubre también el dataset.
 - [x] Añadir el mAP@50-95 (16,9%) y documentar la matriz de confusión con sus etiquetas y conteos en [IA_Models.md](weights/IA_Models.md).
-- [ ] Conservar los reportes fuente de evaluación y aclarar si precisión, recall y F1 son globales, por clase o promedio, incluyendo el umbral usado; pendiente recuperar los artefactos de evaluación.
+- [x] Registrar métricas de V4: mAP por tamaño (Roboflow), P/R/mAP de validación del checkpoint, pérdidas y latencia local en CPU.
+- [ ] Exportar de Roboflow la precisión, recall y **matriz de confusión de V4** en test (la matriz del repositorio es de V3) e indicar el umbral de confianza.
+- [ ] Aclarar el F1 de V3: el registrado (52,6 %) no coincide con el calculado con su P y R (53,3 %).
 - [ ] Cuando haya videos propios, etiquetar fotogramas en Roboflow o CVAT y, si hay tiempo, reentrenar. Separar train/valid/test por recorrido para evitar fuga de fotogramas similares.
 
 ## 7. Backend: feedback y purga lógica — Media
@@ -42,13 +45,14 @@
 - [x] Mostrar en el detalle evidencia, severidad y confianza.
 - [x] Añadir acciones de feedback con estados de envío/error y bloqueo repetido en la vista actual; backend aplica idempotencia por UUID.
 - [x] Recargar el mapa y cerrar el detalle cuando backend oculta el bache.
-- [ ] Compilar y probar UI/servicio en un entorno con Node/npm.
+- [x] Compilar el frontend (`npm run build` OK).
+- [ ] Probar la UI en el navegador con datos reales (marcadores, filtro, foto, feedback).
 
 ## 9. Documentación y presentación — Baja
 
 - [x] Corregir estados de deduplicación e importación: DBSCAN espacial está implementado en el backend y `import_processed_potholes` importa sesiones procesadas y reconstruye consolidados.
 - [x] Añadir protocolo reproducible de sincronización GPS y guía de montaje/calibración de cámara a [DOCUMENTACION.md](DOCUMENTACION.md). Las medidas reales del montaje y los ajustes del logger deben anotarse en campo; no están en el repositorio.
-- [ ] **Conectar el mapa a la API real — Media.** En `frontend/.env.local`, configurar `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` con la URL base del backend (por ejemplo `http://127.0.0.1:8000/api`). Verificar marcadores por color, filtro de severidad, foto con caja y acciones de feedback.
-- [ ] **Prueba completa con datos reales — pendiente de video/GPX.** Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
+- [x] **Conectar el mapa a la API real — Media.** En `frontend/.env.local`, configurar `VITE_USE_MOCK_DATA=false` y `VITE_API_BASE_URL` con la URL base del backend (por ejemplo `http://127.0.0.1:8000/api`). Verificar marcadores por color, filtro de severidad, foto con caja y acciones de feedback.
+- [ ] **Prueba completa con datos reales — parcial.** Hecha con 403 fotogramas + GPX del 7/11 (89 baches en el mapa); falta un recorrido en video a 30 fps. Ejecutar video → `process_video.py` → importar sesión en PostGIS → comprobar resultados en el mapa. Registrar errores y resultado; dejar los testeos pendientes hasta contar con una sesión procesable.
 - [ ] Completar la ficha de campo con dispositivo/app, configuración real del GPS Logger, precisión/frecuencia reportada y medidas reales del montaje cámara–antena (requiere levantamiento en campo).
 - [ ] Preparar y revisar el manual de uso durante una ejecución completa siguiendo [DOCUMENTACION.md](DOCUMENTACION.md), incluida la importación descrita en `backend/README.md` (validación práctica pendiente de datos reales).

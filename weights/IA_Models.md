@@ -1,77 +1,168 @@
 # Modelos de detección de baches
 
-## V4 monoclass (modelo objetivo del procesamiento offline)
+Resumen de versiones (V4 es el modelo actual):
 
-El artefacto `weights/weights_v4_monoclass.pt` fue reportado como entrenado
-con YOLO26 Small y una única clase de detección, `pothole`. La composición del
-dataset informada para esta versión es:
+| Versión | Archivo | Arquitectura | Clases | Uso actual |
+| --- | --- | --- | --- | --- |
+| V4 | `weights_v4_monoclass.pt` | YOLO26 Small | 1: `pothole` | Procesamiento offline (`process_video.py`) y detección en vivo (`detect.py`) |
+| V3 | `weights.pt` | YOLO26 Nano | 3: `pothole_critical`, `pothole_light`, `pothole_moderate` | Histórico; incompatible con el pipeline actual |
+| V2 | No conservado | No documentada | 1 | Histórico |
 
-| Campo | Valor reportado |
-| --- | --- |
-| Arquitectura/tamaño | YOLO26 Small |
-| Clases | 1: `pothole` |
-| Imágenes | 386 |
-| Imágenes propias | 143 |
-| Imágenes seleccionadas del dataset público | 243 |
-| Split train/valid/test | No informado |
-| Métricas de evaluación | No informadas |
-| Licencia del checkpoint/dataset | No verificada |
+## V4 monoclass (modelo actual)
 
-Estos datos describen el entrenamiento comunicado para V4; no sustituyen el
-reporte reproducible ni verifican por sí mismos los metadatos internos del
-checkpoint, la procedencia exacta de las 243 imágenes públicas o los derechos
-de uso. V4 se usa como detector monoclass en el procesamiento offline; la
-severidad se calcula después por ROI y área relativa, no la predice YOLO.
+### Identificación
 
-## V3 multiclase (histórico / compatibilidad)
+| Campo | Valor | Fuente |
+| --- | --- | --- |
+| Model URL / identificador | `lucas-benitez/pothole-vhmow-bygvr-9-yolo26s-t1` | Roboflow |
+| Tipo | YOLO26 Object Detection (Small), modelo base `yolo26s.pt` | Roboflow + checkpoint |
+| Iteración de entrenamiento en Roboflow | 9 (sufijo `-9`) | Roboflow |
+| Versión del dataset | 2026-11-08 4:38 PM | Roboflow |
+| Actualizado en Roboflow | 8/11/2026, 4:59 PM | Roboflow |
+| Fecha interna del checkpoint | 2026-11-08 19:54 UTC (16:54 hora de Paraguay) | Checkpoint |
+| Licencia | AGPL-3.0 | Roboflow + checkpoint (Ultralytics) |
+| Latencia (Cloud API de Roboflow) | 7,5 ms | Roboflow |
+| URL de checkpoint | No indicada (`-`) | Roboflow |
+| Parámetros | 9 948 638 | Checkpoint |
+| SHA-256 | `542e3eea4fb813247abafe4866a510305ea89ab2062963fef1afe086e174280b` | Calculado sobre el archivo |
 
-El archivo `weights/weights.pt` (5,2 MB; presente localmente el 7/11/2026) es el
-checkpoint multiclase anterior, conservado para reproducibilidad y compatibilidad
-con sesiones ya procesadas.
-Los datos de Roboflow proporcionados para V3 son:
+La fecha interna del checkpoint coincide con la actualización de Roboflow
+(minutos de diferencia). Por eso se considera que `weights_v4_monoclass.pt` es
+el modelo de la iteración 9.
+
+### Dataset y entrenamiento
+
+| Campo | Valor | Fuente |
+| --- | --- | --- |
+| Imágenes | 386 (143 propias + 243 seleccionadas de un dataset público) | Reportado por el equipo |
+| Split train/valid/test | No informado | — |
+| Épocas configuradas | 300 (`patience` 90) | Checkpoint |
+| Mejor época (por mAP@50-95 de validación) | 281 | Checkpoint |
+| Tamaño de entrada / batch | 640 px / 31 | Checkpoint |
+| Optimizador / `lr0` / semilla | `auto` / 0,01 / 0 | Checkpoint |
+| Versión de Ultralytics del entrenamiento | 8.4.55 | Checkpoint |
+
+Falta documentar la procedencia exacta de las 243 imágenes públicas y el split.
+
+### Métricas
+
+Hay **dos fuentes de métricas, con valores distintos**. No mezclarlas sin
+indicar de dónde sale cada una.
+
+**a) Gráfico de Roboflow** (versión del dataset 2026-11-08). Roboflow no indica
+en el gráfico sobre qué split se calcularon.
+
+| Métrica | Todos | Objetos chicos | Objetos medianos | Objetos grandes |
+| --- | ---: | ---: | ---: | ---: |
+| mAP@50 | 60,8 % | 0,0 % | 43,2 % | 75,3 % |
+| mAP@50-95 | 28,3 % | 0,0 % | 15,8 % | 38,3 % |
+| mAP@75 | 27,3 % | 0,0 % | 8,3 % | 42,5 % |
+
+Gráfico original: [`Source/v4_map_por_tamano.png`](Source/v4_map_por_tamano.png).
+Los tamaños siguen la convención COCO (chico: < 32×32 px; mediano: hasta
+96×96 px; grande: más de 96×96 px, en la resolución evaluada). El 0 % en
+objetos chicos significa que el modelo no detecta correctamente baches chicos,
+o que el split evaluado casi no los tiene. Es relevante porque en la cámara del
+vehículo los baches lejanos se ven chicos.
+
+**b) Métricas guardadas en el checkpoint** (validación de Ultralytics, mejor
+época 281, umbral de IoU 0,5 para P/R):
+
+| Precisión | Recall | F1 (calculado) | mAP@50 | mAP@50-95 |
+| ---: | ---: | ---: | ---: | ---: |
+| 88,35 % | 66,05 % | 75,6 % | 69,93 % | 36,72 % |
+
+El F1 se calcula como 2·P·R/(P+R) con esos valores. Las métricas de validación
+suelen ser más altas que las de test, porque el split de validación se usa para
+elegir la mejor época.
+
+**Pérdidas** (gráficos de Roboflow): [`v4_box_loss.png`](Source/v4_box_loss.png),
+[`v4_class_loss.png`](Source/v4_class_loss.png) y
+[`v4_object_loss.png`](Source/v4_object_loss.png). En la mejor época el
+checkpoint registra `val/box_loss` 2,253, `val/cls_loss` 1,464 y `val/dfl_loss`
+0,018. En el gráfico "Object Loss" de Roboflow corresponde a `dfl_loss`: YOLO26
+no tiene pérdida de objectness.
+
+**Matriz de confusión de V4: no disponible.** La matriz que existe en el
+repositorio (`Source/matris_confusion.png`) es la de V3, con tres clases. Para
+V4 corresponde una matriz de 2×2 (`pothole` / fondo), que hay que exportar desde
+Roboflow o generar con `yolo val`.
+
+### Rendimiento local (medido en este repositorio)
 
 | Campo | Valor |
 | --- | --- |
-| Model URL / identificador | `lucas-benitez/pothole-vhmow-bygvr-4-yolo26n-t1` |
-| Tipo | YOLO26 Object Detection (Nano) |
-| Versión del dataset | 2026-10-26 2:46 PM |
-| Actualizado en Roboflow | 26/10/2026, 3:06 PM |
-| Licencia | AGPL-3.0 |
-| Latencia (Cloud API) | 7,3 ms |
-| URL de checkpoint | No indicada (`-`) |
+| Hardware | Intel Core i7-12700F (CPU, sin GPU), 32 GB RAM |
+| Software | PyTorch 2.15 (CPU), Ultralytics 8.4.208 |
+| Entrada | Fotogramas 1920×810, `imgsz` 640, `conf` 0,3 |
+| Latencia media | ~51 ms por fotograma (~19 fps), incluyendo pre y posprocesamiento |
 
-El sufijo `-4` del identificador de Roboflow señala la cuarta iteración de
-entrenamiento del proyecto: la tercera se descartó. **V3** es el nombre de la
-versión del modelo en este repositorio/proyecto, y corresponde a esa cuarta
-iteración; no significa que sea la tercera iteración de Roboflow.
+La latencia de 7,5 ms de Roboflow es de su API en la nube con GPU y no se
+compara directamente con esta.
 
-Las notas del proyecto describen un dataset comunitario público purgado
-manualmente (~700 imágenes revisadas; 338 seleccionadas, más aumentos), con
-división 70/20/10 y etiquetas propias de tres niveles de severidad. El origen
-documentado es, por tanto, un entrenamiento del proyecto sobre datos públicos,
-no un peso público original. La URL/model card identifica el modelo de
-Roboflow, pero no se ha indicado un enlace de descarga del checkpoint ni se ha
-verificado que sus bytes coincidan con `weights/weights.pt`. La licencia
-reportada para el modelo es AGPL-3.0; confirmar si cubre también el dataset y
-los pesos antes de redistribuirlos.
+### Prueba de campo (7/11/2026, Encarnación)
 
-## Versiones y resultados registrados
+Sobre 403 fotogramas (1 fps) de 5 sesiones con GPX:
 
-Las métricas siguientes se transcriben de las notas existentes; no se dispone
-en el repositorio de los informes de evaluación, predicciones ni etiquetas de
-test para reproducirlas. No se deben presentar como evaluación independiente.
+| Indicador | Valor |
+| --- | ---: |
+| Fotogramas con al menos una detección | 93 |
+| Detecciones (`conf` ≥ 0,3) | 117 |
+| Detecciones dentro del ROI y georreferenciadas | 115 |
+| Baches consolidados en PostGIS (DBSCAN, 2,5 m) | 89 |
+| Severidad asignada | 61 leves, 28 moderados, 0 críticos |
 
-| Modelo | Dataset / configuración | mAP@50 | mAP@50-95 | Precisión | Recall | F1 | Matriz de confusión |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| V2 (10/10/2026) | No documentado; una clase | 82,7% | No registrado | 86,4% | 75,5% | 80,6% | No registrada |
-| V3 (Roboflow, 26/10/2026; iteración 4) | Dataset versión 2026-10-26 2:46 PM; 338 imágenes seleccionadas + aumentos; 70/20/10; 3 clases | 39,2% | 16,9% | 63,1% | 46,2% | 52,6% | [Matriz etiquetada](Source/matris_confusion_labeled.svg) |
-| V4 monoclass | YOLO26 Small; 386 imágenes reportadas (143 propias + 243 públicas seleccionadas); split/métricas pendientes | — | — | — | — | — | — |
+No hay etiquetas de verdad de campo para esos fotogramas, así que **no se puede
+calcular precisión ni recall de campo**. La inspección visual muestra falsos
+positivos (grietas y marcas chicas). Además, esos fotogramas pueden estar entre
+las 143 imágenes propias usadas para entrenar, así que no sirven como test.
 
-La matriz de confusión V3 está disponible como imagen original en
-[`Source/matris_confusion.png`](Source/matris_confusion.png) y con leyendas
-añadidas en [`Source/matris_confusion_labeled.svg`](Source/matris_confusion_labeled.svg).
-Según la convención indicada para esa imagen, las filas son Ground Truth y las
-columnas son Prediction. Valores leídos de la matriz original:
+## V3 multiclase (histórico)
+
+`weights/weights.pt` es el checkpoint multiclase anterior, conservado por
+reproducibilidad. El pipeline actual lo rechaza porque tiene más de una clase.
+
+| Campo | Valor | Fuente |
+| --- | --- | --- |
+| Model URL / identificador | `lucas-benitez/pothole-vhmow-bygvr-4-yolo26n-t1` | Roboflow |
+| Tipo | YOLO26 Object Detection (Nano) | Roboflow + checkpoint |
+| Iteración en Roboflow | 4 (la tercera se descartó) | Roboflow |
+| Versión del dataset | 2026-10-26 2:46 PM | Roboflow |
+| Actualizado en Roboflow | 26/10/2026, 3:06 PM | Roboflow |
+| Fecha interna del checkpoint | 2026-10-26 18:04 UTC (15:04 hora de Paraguay) | Checkpoint |
+| Licencia | AGPL-3.0 | Roboflow + checkpoint |
+| Latencia (Cloud API) | 7,3 ms | Roboflow |
+| Parámetros | 2 504 970 | Checkpoint |
+| SHA-256 | `2c4a2b4c81e2f890565c4f3a8ae3c3c5e5fccf1ac9943a06b7756b799f8cade2` | Calculado sobre el archivo |
+
+"V3" es el nombre de la versión en este proyecto y corresponde a la iteración
+4 de Roboflow. La fecha interna del checkpoint coincide con la actualización en
+Roboflow, así que el archivo corresponde a esa iteración.
+
+Dataset (según las notas del proyecto): dataset comunitario público purgado a
+mano (~700 imágenes revisadas; 338 seleccionadas, más aumentos), división
+70/20/10 y etiquetas propias de tres niveles de severidad.
+
+### Métricas de V3
+
+| Fuente | mAP@50 | mAP@50-95 | Precisión | Recall | F1 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Notas del proyecto (Roboflow) | 39,2 % | 16,9 % | 63,1 % | 46,2 % | 52,6 % (registrado) / 53,3 % (calculado con P y R) |
+| Checkpoint (validación, mejor época) | 33,03 % | 18,69 % | 50,51 % | 36,48 % | 42,4 % (calculado) |
+
+El F1 registrado (52,6 %) no coincide con el que sale de la precisión y el
+recall registrados (53,3 %). Puede ser un promedio por clase; hasta confirmarlo,
+usar el valor calculado e indicar cómo se obtuvo.
+
+Pérdidas del último registro del historial de entrenamiento: `val/dfl_loss`
+0,021 (el "Object Loss" de Roboflow), `val/cls_loss` 3,0211 y `val/box_loss`
+2,0772. Son **pérdidas de validación**, no de entrenamiento.
+
+### Matriz de confusión de V3
+
+[`Source/matris_confusion.png`](Source/matris_confusion.png) (original) y
+[`Source/matris_confusion_labeled.svg`](Source/matris_confusion_labeled.svg)
+(con etiquetas). Filas: Ground Truth; columnas: Prediction.
 
 | Ground Truth \\ Prediction | `pothole_critical` | `pothole_light` | `pothole_moderate` | `false_negative` |
 | --- | ---: | ---: | ---: | ---: |
@@ -80,20 +171,40 @@ columnas son Prediction. Valores leídos de la matriz original:
 | `pothole_moderate` | 1 | 1 | 8 | 16 |
 | `false_positive` | 0 | 9 | 6 | 0 |
 
-Para V3 también se anotaron Object Loss 0,021, Class Loss 3,0211 y Box Loss
-2,0772 (época 258; YOLO26 Nano, según las notas). La latencia de 7,3 ms es de
-Roboflow Cloud API y no representa el rendimiento local de `weights.pt`. Las pérdidas no sustituyen
-las métricas de evaluación. No está especificado si los valores de precisión,
-recall y F1 son globales, por clase o promedio, ni sobre qué split se calcularon.
+Lectura: de 64 baches reales, el modelo detectó 32 (50 %) y no vio los otros 32.
+De los 32 detectados, 29 tuvieron la severidad correcta (90,6 %). Además dio 15
+falsos positivos. Es decir, V3 fallaba sobre todo en **encontrar** baches más
+que en clasificar su severidad. Esto motivó V4: un detector de una sola clase,
+con la severidad calculada aparte por área.
 
-## Evaluación pendiente para el informe
+## V2 (histórico)
 
-Completar y guardar el informe/exportación de evaluación sobre el conjunto de
-test no usado en entrenamiento ni ajuste. La matriz y mAP@50-95 fueron añadidos
-con la información disponible; falta conservar los reportes fuente y aclarar si
-precisión, recall y F1 son globales, por clase o promedio, y su umbral de
-confianza, versión del dataset y fecha. No inferir valores ausentes de los
-registros actuales. Los fotogramas propios, si se etiquetan, deben separarse por
-recorrido antes de dividirlos para evitar fotogramas casi idénticos entre train
-y test. Roboflow y CVAT son opciones de anotación; el reentrenamiento es trabajo
-futuro, no un resultado completado.
+| Fecha | Clases | mAP@50 | Precisión | Recall | F1 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 10/10/2026 | 1 | 82,7 % | 86,4 % | 75,5 % | 80,6 % |
+
+Dataset, split y checkpoint no documentados. No es comparable con V3 y V4
+porque se evaluó sobre otro dataset.
+
+## Métricas que pide el informe (formato IEEE) y estado
+
+| Métrica pedida | Estado para V4 |
+| --- | --- |
+| mAP | ✅ Roboflow (60,8 % / 28,3 %) y checkpoint (69,9 % / 36,7 %) |
+| F1-score | ✅ 75,6 %, calculado con P/R de validación del checkpoint. Para test hace falta exportar P/R de Roboflow |
+| Precisión / Recall | ✅ Validación (88,4 % / 66,1 %). Test: pendiente |
+| Matriz de confusión | ❌ Solo existe la de V3. Exportar la de V4 desde Roboflow o con `yolo val` |
+| Tiempo de inferencia | ✅ ~51 ms/fotograma en CPU local; 7,5 ms en la nube de Roboflow |
+| Accuracy | ⚠️ No es una métrica estándar en detección de objetos (no hay "verdaderos negativos" contables). Se puede reportar la exactitud de severidad de V3 (90,6 % de los detectados) o justificar que no aplica |
+| RMSE | ⚠️ No aplica a la detección. Se puede usar para el **error de georreferenciación**: medir con GPS la posición real de 10–20 baches y comparar con la del sistema. Requiere trabajo de campo |
+
+## Pendiente
+
+- Exportar desde Roboflow la precisión, recall y matriz de confusión de V4 en el
+  split de test, e indicar el umbral de confianza.
+- Documentar el split train/valid/test de V4 y la procedencia de las 243
+  imágenes públicas.
+- Confirmar si la licencia AGPL-3.0 cubre también el dataset.
+- Para una evaluación de campo, etiquetar fotogramas de un recorrido **no usado
+  en entrenamiento**, separando por recorrido para evitar fotogramas casi
+  idénticos entre train y test.
